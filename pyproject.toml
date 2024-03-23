@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "flowvis-3d"
+version = "0.1.0"
+description = "repository intended to process 3D point clouds obtained from Flow-Vis WT experiments"
+authors = ["fmz"]
+package-mode = false
+
+[tool.poetry.scripts]
+# for any scripts you want to be able to run with poetry, define them here
+
+[tool.poetry.dependencies]
+python = "^3.10.11"  
+open3d = "0.17"  
+numpy = "^1.21"  
+
+[tool.poetry.dev-dependencies]
+# Development dependencies such as linters and testing libraries go here
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
