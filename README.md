@@ -21,9 +21,11 @@ To set up this project locally, follow these steps:
 2. **Install dependencies**
 
 - Configure Poetry to create the virtual environment within the project directory:
+
     `poetry config virtualenvs.in-project true`
 
 - Then, install dependencies with Poetry:
+
     `poetry install`
 
 This creates a `.venv` directory inside your project and installs all dependencies.
