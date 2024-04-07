@@ -1,7 +1,7 @@
 import open3d as o3d
 import ipywidgets as widgets
 from IPython.display import clear_output, display, HTML
-from point_cloud_utils import load_pcd, load_stl
+from components.point_cloud_utils import load_pcd, load_stl
 
 class PointCloudVisualizer:
     def __init__(self, input_clouds=None, input_path=None, target_mesh=None, target_path=None):

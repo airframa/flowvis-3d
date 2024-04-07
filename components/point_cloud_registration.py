@@ -1,9 +1,9 @@
 import open3d as o3d
 import numpy as np
 import copy
-from point_cloud_visualizer import PointCloudVisualizer
-from point_cloud_preprocessor import PointCloudPreprocessor
-from point_cloud_utils import change_file_ext
+from components.point_cloud_visualizer import PointCloudVisualizer
+from components.point_cloud_preprocessor import PointCloudPreprocessor
+from components.point_cloud_utils import change_file_ext
 
 
 class PointCloudRegistration(PointCloudPreprocessor):
@@ -296,7 +296,13 @@ class PointCloudRegistration(PointCloudPreprocessor):
         print("Registered point cloud:")
         PointCloudVisualizer(input_clouds=self.registered_pcd, target_path=change_file_ext(self.target_path))
 
-        return self.registered_pcd, best_registration.transformation # Return the registered point cloud and the transfromation matrix
+        log_text = "\n"
+        log_text += "Registration procedure completed.\n"
+        log_text += f"RANSAC Global Registration:\nVoxel size for feature detection: {voxel_size}\n"
+        log_text += f"Fitness: {best_registration.fitness}\n"
+        # Build the log text with all necessary details
+
+        return self.registered_pcd, best_registration.transformation, log_text # Return the registered point cloud and the transfromation matrix
     
     def save_registered_ply(self, file_path, save_mesh = False):
         """

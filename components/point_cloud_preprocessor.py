@@ -8,8 +8,8 @@ from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial import cKDTree
 from scipy.signal import savgol_filter
-from point_cloud_visualizer import PointCloudVisualizer
-from point_cloud_utils import calculate_point_cloud_metrics
+from components.point_cloud_visualizer import PointCloudVisualizer
+from components.point_cloud_utils import calculate_point_cloud_metrics
         
 
 class PointCloudPreprocessor():
