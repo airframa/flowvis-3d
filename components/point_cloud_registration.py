@@ -1,6 +1,8 @@
 import open3d as o3d
 import numpy as np
 import copy
+import tempfile
+import os
 from components.point_cloud_visualizer import PointCloudVisualizer
 from components.point_cloud_preprocessor import PointCloudPreprocessor
 from components.point_cloud_utils import change_file_ext
@@ -14,7 +16,7 @@ class PointCloudRegistration(PointCloudPreprocessor):
         Args:
             source (str or o3d.geometry.PointCloud): Either the path to the source .ply file containing the point cloud data
                 or the loaded source point cloud itself.
-            target (str or o3d.geometry.PointCloud): Either the path to the target .ply file containing the point cloud data
+            target (str or o3d.geometry.PointCloud): Either the path to the target .ply/.stl file containing the point cloud data
                 or the loaded target point cloud itself.
         """
 
@@ -30,7 +32,14 @@ class PointCloudRegistration(PointCloudPreprocessor):
             self.source_pcd = source
 
         if isinstance(target, str):
-            self.target_pcd = o3d.io.read_point_cloud(target)
+            # obtain point cloud either from .ply or .stl file
+            if target.endswith(".ply"):
+                self.target_pcd = o3d.io.read_point_cloud(target)
+            elif target.endswith(".stl"):
+                self.target_pcd = self.stl_to_point_cloud(target)
+            else:
+                log_text = "Please select a .ply or .stl file"
+                return log_text
             self.target_path = target
         else:
             self.target_pcd = target
@@ -44,6 +53,32 @@ class PointCloudRegistration(PointCloudPreprocessor):
 
         # Initialize global registration transfromation variable
         self.transformation = None
+
+    def stl_to_point_cloud(self, stl_file_path):
+        """
+        Converts an STL file to a Point Cloud and visualizes it.
+
+        Args:
+            stl_file_path (str): Path to the STL file.
+
+        Returns:
+            o3d.geometry.PointCloud: The converted point cloud.
+        """
+        # Read the mesh from an STL file
+        mesh = o3d.io.read_triangle_mesh(stl_file_path)
+
+        # Create a temporary directory to save the intermediate PLY file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_ply_path = os.path.join(temp_dir, 'temp_mesh.ply')
+            
+            # Save the mesh to a PLY file
+            o3d.io.write_triangle_mesh(temp_ply_path, mesh)
+            
+            # Read the PLY file back in as a point cloud
+            pcd = o3d.io.read_point_cloud(temp_ply_path)
+            
+            # No need to manually delete the temp file; it will be removed with the temporary directory
+            return pcd
 
     def preprocess_point_cloud(self, pcd, voxel_size):
         """
