@@ -1,33 +1,57 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit
-from PySide6.QtGui import QFont, QPixmap
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent
+from PySide6.QtCore import Qt
 from components.point_cloud_utils import load_pcd
 from components.point_cloud_registration import PointCloudRegistration
 import open3d as o3d
 
 print('Yah mon, starting up...')  # Should print immediately
 
-# Define a QWidget subclass that supports drag-and-drop functionality.
-class DroppableWidget(QWidget):
-    def __init__(self, parent=None):
+
+class FileChooserWidget(QWidget):
+    def __init__(self, button_text="Select File", initial_dir="", parent=None):
         super().__init__(parent)
-        # Enable the widget to accept dropped data.
+        self.initial_dir = initial_dir
+        self.button_text = button_text
+        self.setupUI()
+
+    def setupUI(self):
+        self.layout = QVBoxLayout(self)
+
+        # Select File Button with styled appearance
+        self.selectFileButton = QPushButton(self.button_text)
+        self.selectFileButton.setStyleSheet("QPushButton { background-color: red; color: white; font-weight: bold; }")
+        self.selectFileButton.setMinimumHeight(40)  # Set minimum height to make button larger
+        self.layout.addWidget(self.selectFileButton)
+        self.selectFileButton.clicked.connect(self.openFileDialog)
+
+        # File path line edit, acting as the drag-and-drop area
+        self.fileLineEdit = QLineEdit()
+        self.fileLineEdit.setReadOnly(True)
+        self.fileLineEdit.setMinimumHeight(30)  # Slightly larger line edit for better visual
+        self.layout.addWidget(self.fileLineEdit)
+
         self.setAcceptDrops(True)
 
-    # Override the dragEnterEvent to respond to drag actions.
-    def dragEnterEvent(self, event):
-        # Check if the dragged data contains URLs (file paths).
+    def openFileDialog(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, self.button_text, self.initial_dir, "Point Cloud Files (*.ply *.stl);;All Files (*)")
+        if file_name:
+            self.fileLineEdit.setText(file_name)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
-            # Accept the action proposed by the drag event.
             event.acceptProposedAction()
 
-    # Override the dropEvent to handle the actual drop action.
-    def dropEvent(self, event):
-        # Extract file paths from the dropped URLs.
-        files = [url.toLocalFile() for url in event.mimeData().urls()]
-        # If there are files, update the file path line edit with the first file path.
-        if files:
-            self.parent().filePathLineEdit.setText(files[0])
+    def dropEvent(self, event: QDropEvent):
+        urls = event.mimeData().urls()
+        if urls:
+            path = urls[0].toLocalFile()
+            self.fileLineEdit.setText(path)
+
+    def getFilePath(self):
+        """Return the currently selected file path."""
+        return self.fileLineEdit.text()
+
 
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
@@ -81,100 +105,64 @@ class CollapsibleSection(QWidget):
         # Provides access to the content area's layout
         return self.contentWidget.layout()
 
-
 class MainApp(QMainWindow):
     def __init__(self):
         super(MainApp, self).__init__()
         self.setWindowTitle("FlowVis3D")
+        self.setupUI()
 
-        centralWidget = DroppableWidget(self)
+    def setupUI(self):
+        centralWidget = QWidget(self)
         self.setCentralWidget(centralWidget)
         layout = QVBoxLayout(centralWidget)
 
         # Load and display the logo at the top
         self.logoLabel = QLabel()
-        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg")
-        self.logoPixmap = self.logoPixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.logoLabel.setPixmap(self.logoPixmap)
         self.logoLabel.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logoLabel)
 
-        # Visualization Section
+        # Visualization Section with CollapsibleSection
         visualizationSection = CollapsibleSection("Load", self)
         layout.addWidget(visualizationSection)
 
-        # Load section explanation text, adjusted styling for padding
-        loadExplanation = QLabel("Select a .ply or .stl file and display the point cloud.")
-        loadExplanation.setWordWrap(True)
-        loadExplanation.setStyleSheet("color: white; padding-top: -10px; padding-bottom: 10px;")  # Adjusted padding
-        visualizationSection.contentLayout().addWidget(loadExplanation)
-        # Add spacing after the explanation text for more separation
-        visualizationSection.contentLayout().addSpacing(10)
+        # Load section with FileChooserWidget
+        self.loadFileChooser = FileChooserWidget("Select Point Cloud", "\\\\srvnetapp00\\Technical\\Aerodynamics\\Development\\FlowViz", self)
+        visualizationSection.contentLayout().addWidget(self.loadFileChooser)
 
-        # Add widgets to the visualization section
-        # Select file
-        self.selectFileButton = QPushButton("Select Point Cloud")
-        self.selectFileButton.setStyleSheet("QPushButton { background-color: red; color: white; font-weight: bold; }")
-        self.selectFileButton.clicked.connect(self.openFileDialog)
-        visualizationSection.contentLayout().addWidget(self.selectFileButton)
-        self.filePathLineEdit = QLineEdit()
-        visualizationSection.contentLayout().addWidget(self.filePathLineEdit)
-
-        # Show 3D Point Cloud
+        # Show 3D Point Cloud Button within the visualization section
         self.visualizeButton = QPushButton("Visualize Point Cloud")
         self.visualizeButton.setStyleSheet("QPushButton { background-color: red; color: white; font-weight: bold; }")
         self.visualizeButton.clicked.connect(self.visualizePointCloud)
         visualizationSection.contentLayout().addWidget(self.visualizeButton)
 
-        # Registration Section with explanation and new UI elements
+        # Register Section with CollapsibleSection
         registrationSection = CollapsibleSection("Register", self)
         layout.addWidget(registrationSection)
 
-        # Registration section explanation text
-        registerExplanation = QLabel("Select a reference .stl file and register the point cloud to the CFD or WT coordinates.")
-        registerExplanation.setWordWrap(True)
-        registerExplanation.setStyleSheet("color: white; padding-top: -5px; padding-bottom: 10px;")
-        registrationSection.contentLayout().addWidget(registerExplanation)
-        registrationSection.contentLayout().addSpacing(10)
+        # Register FileChooserWidget for "Register" section
+        self.registerFileChooser = FileChooserWidget("Select Reference", "\\\\srvnetapp00\\Technical\\Aerodynamics\\Development\\FlowViz", self)
+        registrationSection.contentLayout().addWidget(self.registerFileChooser)
 
-        # "Select Reference" button
-        self.selectReferenceButton = QPushButton("Select Reference")
-        self.selectReferenceButton.setStyleSheet("QPushButton { background-color: red; color: white; font-weight: bold; }")
-        self.selectReferenceButton.clicked.connect(self.selectReferenceFileDialog)
-        registrationSection.contentLayout().addWidget(self.selectReferenceButton)
-
-        # Drag and Drop item for selecting reference file (referenceFilePathLineEdit)
-        self.referenceFilePathLineEdit = QLineEdit()
-        registrationSection.contentLayout().addWidget(self.referenceFilePathLineEdit)
-
-        # Registration Section enhanced with an "Execute Registration" button
-        self.executeRegistrationButton = QPushButton("Register")
+        # Execute Registration Button within the registration section
+        self.executeRegistrationButton = QPushButton("Register Point Cloud")
         self.executeRegistrationButton.setStyleSheet("QPushButton { background-color: red; color: white; font-weight: bold; }")
         self.executeRegistrationButton.clicked.connect(self.executeRegistration)
         registrationSection.contentLayout().addWidget(self.executeRegistrationButton)
 
-        # Add a QLabel for displaying registration logs
+        # Registration logs display
         self.registrationLogLabel = QLabel()
         self.registrationLogLabel.setWordWrap(True)
-        # self.registrationLogLabel.setStyleSheet("""
-        #     QLabel {
-        #         color: white;
-        #         background-color: black;
-        #         padding-top: 10px;
-        #         padding-bottom: 10px;
-        #         margin-top: 10px;  # Adds some space between the button and the label
-        #     }
-        # """)
         self.registrationLogLabel.setStyleSheet("""
             QLabel {
                 color: white;
                 background-color: black;
                 padding-top: 5px;
                 padding-bottom: 5px;
-                margin-top: 5px; /* Adds some space between the button and the label */
+                margin-top: 5px;
             }
         """)
-
         registrationSection.contentLayout().addWidget(self.registrationLogLabel)
 
         # Add spacing after the new elements for more separation
@@ -197,24 +185,15 @@ class MainApp(QMainWindow):
 
         self.show()
 
-    # Define the method to open a file dialog and update the file path line edit.
-    def openFileDialog(self):
-        # Specify the initial directory for the file dialog
-        initialDir = "\\\\srvnetapp00\\Technical\\Aerodynamics\\Development\\FlowViz"
-        file_name, _ = QFileDialog.getOpenFileName(self, "Open Point Cloud File", initialDir, "Point Cloud Files (*.ply *.stl)")
-        if file_name:
-            self.filePathLineEdit.setText(file_name)
+    def setLoadFilePath(self, file_path):
+        self.filePathLineEdit.setText(file_path)
 
-    def selectReferenceFileDialog(self):
-        # Method to open a file dialog for selecting the reference file
-        initialDir = "\\\\srvnetapp00\\Technical\\Aerodynamics\\Development\\FlowViz"
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Reference File", initialDir, "Reference Files (*.ply)")
-        if file_name:
-            self.referenceFilePathLineEdit.setText(file_name)
+    def setReferenceFilePath(self, file_path):
+        self.referenceFilePathLineEdit.setText(file_path)
 
     # Define the method to load and visualize the point cloud using Open3D.
     def visualizePointCloud(self):
-        file_path = self.filePathLineEdit.text()
+        file_path = self.loadFileChooser.getFilePath()  # Use the getFilePath method from FileChooserWidget
         if file_path:
             pcd = load_pcd(file_path)  # Load the point cloud data.
             o3d.visualization.draw_geometries([pcd])  # Visualize the point cloud.
@@ -222,8 +201,8 @@ class MainApp(QMainWindow):
             print("No file selected.")
 
     def executeRegistration(self):
-        sourceFilePath = self.filePathLineEdit.text()
-        referenceFilePath = self.referenceFilePathLineEdit.text()
+        sourceFilePath = self.loadFileChooser.getFilePath()  # Use the getFilePath method from FileChooserWidget
+        referenceFilePath = self.registerFileChooser.getFilePath()  # Use the getFilePath method from FileChooserWidget
 
         # Ensure both source and reference paths are provided
         if not sourceFilePath or not referenceFilePath:
@@ -247,7 +226,6 @@ class MainApp(QMainWindow):
         # Process the registered point cloud as needed
         print("Registration completed.")
         # For example, update the visualization or inform the user of the completion
-
 
 if __name__ == "__main__":
     app = QApplication([])

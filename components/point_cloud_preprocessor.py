@@ -60,7 +60,7 @@ class PointCloudPreprocessor():
 
         # Calculate the optimal voxel size based on the target point density threshold.
         voxel_size = self.calculate_voxel_size(metrics, point_density_threshold)
-        print(f'Voxel size: {voxel_size}')
+        # print(f'Voxel size: {voxel_size}')
 
         # Log the number of points in the point cloud before preprocessing.
         npoints_initial = len(self.input_cloud.points)

@@ -36,9 +36,11 @@ class PointCloudRegistration(PointCloudPreprocessor):
             self.target_pcd = target
             self.target_path = None
 
-        # Create a log file for registration
-        self.log_file_path = "D:/flowvis_data/registration/registration_log.txt"
+        # Create a log file path including the file name and extension
+        self.log_file_path = "//srvnetapp00/Technical/Aerodynamics/Development/FlowViz/FV_CFD_REF/registration_log.txt"
+        # Then, open the log file for writing as before
         self.log_file = open(self.log_file_path, "w")
+
 
         # Initialize global registration transfromation variable
         self.transformation = None
@@ -270,17 +272,19 @@ class PointCloudRegistration(PointCloudPreprocessor):
         self.log_file.close()
 
         # Print the final transformation data and metrics to the console
-        print("Registration procedure completed. Check the registration procedure log in the file 'registration_log.txt'in the registration folder.")
-        print("RANSAC Global Registration:")
-        print(f"Voxel size for feature detection: {best_voxel_size}")
-        print(f"Fitness: {best_ransac_fitness}")
+        # log_text = "\n"
+        path = "//srvnetapp00/Technical/Aerodynamics/Development/FlowViz/FV_CFD_REF"
+        log_text = "Registration procedure completed. Check the procedure log in the file 'registration_log.txt' in the folder at '{}'.".format(path)
+        log_text += f"\nRANSAC Global Registration fitness: {best_ransac_fitness}\n"
+        # log_text += f"Voxel size for feature detection: {best_voxel_size}\n"
+        # log_text += f"Fitness: {best_ransac_fitness}\n"
         if icp > 0:
-            print("Final ICP Fine Registration:")
-            print(f"Fitness: {best_registration.fitness}")
-            print(f"Transformation:\n{best_registration.transformation}\n")
+            log_text += f"Final ICP Fine Registration fitness: {best_registration.fitness}\n"
+            # log_text += f"Fitness: {best_registration.fitness}\n"
+            log_text += f"Transformation:\n{best_registration.transformation}"
         else:
-             print(f"Transformation:\n{best_registration.transformation}\n")
-             print("Final ICP Fine Registration not executed due to poor RANSAC fitness results")
+             log_text += f"Transformation:\n{best_registration.transformation}\n"
+             log_text += "Final ICP Fine Registration not executed due to poor RANSAC fitness results\n"
 
         # Check if all ICP fitness values are below their respective desired thresholds
         if all(icp_fitness < desired_fitness for icp_fitness, desired_fitness in zip(icp_fitness_values, desired_fitness_icp)):
@@ -293,14 +297,8 @@ class PointCloudRegistration(PointCloudPreprocessor):
         self.transformation = best_registration.transformation
 
         # Enable registration visualization
-        print("Registered point cloud:")
+        # log_text += "Registered point cloud:"
         PointCloudVisualizer(input_clouds=self.registered_pcd, target_path=change_file_ext(self.target_path))
-
-        log_text = "\n"
-        log_text += "Registration procedure completed.\n"
-        log_text += f"RANSAC Global Registration:\nVoxel size for feature detection: {voxel_size}\n"
-        log_text += f"Fitness: {best_registration.fitness}\n"
-        # Build the log text with all necessary details
 
         return self.registered_pcd, best_registration.transformation, log_text # Return the registered point cloud and the transfromation matrix
     
