@@ -89,46 +89,54 @@ def applyLineEditStyle(lineEdit):
 
 def applyTextAndScrollBarStyle(widget):
     baseStyle = """
-        QTextEdit {
-            background-color: white;  /* White background for the scroll area */
-            color: #333;  /* Dark text color */
-            border-radius: 12px;  /* Rounded corners */
-            padding: 5px 15px;  /* Padding to provide ample space for text */
-            font-size: 14px;  /* Appropriate font size */
-            margin: 5px;  /* Consistent spacing around the widget */
-        }
-        QTextEdit:read-only {
-            background-color: #e0e0e0;  /* Slightly darker for read-only mode */
-        }
+    QTextEdit {
+        color: #333;
+        padding: 5px 15px;
+        font-size: 14px;
+        margin: 5px;
+        background-color: #f0f0f0;  /* Slightly grayish white */
+        border: none;
+        border-radius: 12px;
+    }
+    QTextEdit:read-only {
+        background-color: #e0e0e0;  /* A bit darker for read-only mode */
+    }
+    QTextEdit QAbstractScrollArea::viewport {
+        background: #e0e0e0;  /* Ensure viewport background matches the QTextEdit */
+        border-radius: 12px;
+    }
     """
-
+    
     scrollbarStyle = """
-        QScrollBar:vertical {
-            border: none;
-            background: #2f2f2f;  /* Scrollbar background */
-            width: 10px;  /* Width of the scrollbar */
-            margin: 12px 0 12px 0;  /* Margin around the scrollbar */
-            border-radius: 5px;  /* Rounded corners for the scrollbar track */
-        }
-        QScrollBar::handle:vertical {
-            background-color: #5b5b5b;  /* Color of the handle */
-            min-height: 30px;  /* Minimum height of the handle */
-            border-radius: 5px;  /* Rounded corners for the handle */
-        }
-        QScrollBar::handle:vertical:hover {
-            background-color: #787878;  /* Color when hovered */
-        }
-        QScrollBar::sub-line:vertical, QScrollBar::add-line:vertical {
-            height: 0px;  /* Hide the buttons */
-        }
-        QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical,
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-            background: none;  /* Hide arrows and unnecessary parts */
-        }
+    QTextEdit QScrollBar:vertical {
+        border: none;
+        background: #e0e0e0;  /* Ensure scrollbar track matches the QTextEdit background */
+        width: 10px;
+        margin: 0px 0 0px 0;
+        border-radius: 0px;
+    }
+    QTextEdit QScrollBar::handle:vertical {
+        background-color: #5b5b5b;
+        min-height: 30px;
+        border-radius: 5px;
+    }
+    QTextEdit QScrollBar::handle:vertical:hover {
+        background-color: #5b5b5b;
+    }
+    QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical {
+        border: none;
+        background: none;
+        height: 0px;
+    }
+    QTextEdit QScrollBar::add-page:vertical, QTextEdit QScrollBar::sub-page:vertical {
+        background: none;
+    }
     """
-
+    
     # Combine both styles and apply to the widget
     widget.setStyleSheet(baseStyle + scrollbarStyle)
+
+
 
 class MainApp(QMainWindow):
     def __init__(self):
@@ -144,7 +152,7 @@ class MainApp(QMainWindow):
 
         # Load and display the logo at the top
         self.logoLabel = QLabel()
-        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(500, 500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(575, 575, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.logoLabel.setPixmap(self.logoPixmap)
         self.logoLabel.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logoLabel)
@@ -205,12 +213,11 @@ class MainApp(QMainWindow):
         self.registrationLogLabel = QTextEdit()
         self.registrationLogLabel.setReadOnly(True)
         self.registrationLogLabel.setWordWrapMode(QTextOption.WrapAnywhere)
-        self.registrationLogLabel.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.registrationLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.registrationLogLabel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show vertical scrollbar only when needed
+        self.registrationLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show horizontal scrollbar only when needed
         applyTextAndScrollBarStyle(self.registrationLogLabel)  # Apply combined styles
         self.registrationLogLabel.setFixedHeight(120)
         registrationSection.contentLayout().addWidget(self.registrationLogLabel)
-
 
         # Button to copy the transformation matrix to the clipboard
         self.copyMatrixButton = QPushButton("Copy Transformation Matrix")

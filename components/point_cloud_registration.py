@@ -281,9 +281,9 @@ class PointCloudRegistration(PointCloudPreprocessor):
         if icp > 0:
             log_text += f"Final ICP Fine Registration fitness: {best_registration.fitness}\n"
             # log_text += f"Fitness: {best_registration.fitness}\n"
-            log_text += f"Transformation:\n{best_registration.transformation}"
+            log_text += f"Transformation matrix:\n{best_registration.transformation}"
         else:
-             log_text += f"Transformation:\n{best_registration.transformation}\n"
+             log_text += f"Transformation matrix:\n{best_registration.transformation}\n"
              log_text += "Final ICP Fine Registration not executed due to poor RANSAC fitness results\n"
 
         # Check if all ICP fitness values are below their respective desired thresholds
