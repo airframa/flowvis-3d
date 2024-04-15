@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit
-from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication, QMovie
+from PySide6.QtCore import Qt, QTimer, QObject, Signal, Slot, QThread
 from components.point_cloud_utils import load_pcd
 from components.point_cloud_registration import PointCloudRegistration
 import open3d as o3d
@@ -137,7 +137,6 @@ def applyTextAndScrollBarStyle(widget):
     widget.setStyleSheet(baseStyle + scrollbarStyle)
 
 
-
 class MainApp(QMainWindow):
     def __init__(self):
         super(MainApp, self).__init__()
@@ -209,6 +208,25 @@ class MainApp(QMainWindow):
         self.executeRegistrationButton.clicked.connect(self.executeRegistration)
         registrationSection.contentLayout().addWidget(self.executeRegistrationButton)
 
+        # Spinning wheel setup
+        wheelLayout = QHBoxLayout()
+        wheelLayout.addStretch()  # Add stretch to push everything to the center
+
+        self.loadingLabel = QLabel()
+        self.loadingMovie = QMovie("./ui/spinning_wheel_v2_60.gif")
+        self.loadingLabel.setMovie(self.loadingMovie)
+        self.loadingLabel.setAlignment(Qt.AlignCenter)
+        self.loadingLabel.setFixedSize(25, 25)
+        self.loadingMovie.setScaledSize(self.loadingLabel.size())
+        self.loadingLabel.hide()
+
+        wheelLayout.addWidget(self.loadingLabel)
+        wheelLayout.addStretch()  # Add stretch to ensure the label is centered
+
+        # Insert the wheel layout into the registration section's layout
+        registrationSection.contentLayout().addLayout(wheelLayout)
+
+
        # Registration logs display with combined text area and scrollbar style
         self.registrationLogLabel = QTextEdit()
         self.registrationLogLabel.setReadOnly(True)
@@ -244,9 +262,29 @@ class MainApp(QMainWindow):
         self.show()
 
     def openFileDialog(self, lineEdit, initial_dir):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Select Point Cloud File", initial_dir, "Point Cloud Files (*.ply *.stl);;All Files (*)")
-        if file_name:
-            lineEdit.setText(file_name)
+        # Create a new QFileDialog instance every time
+        dialog = QFileDialog(self, "Select Point Cloud File")
+        dialog.setDirectory(initial_dir)
+        dialog.setNameFilter("Point Cloud Files (*.ply *.stl);;All Files (*)")
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setViewMode(QFileDialog.Detail)
+
+        # Setting modality to application modal
+        dialog.setModal(True)
+
+        # Attempting again to control the size
+        dialog.resize(800, 600)
+        dialog.setMinimumSize(800, 600)
+
+        # Ensure the dialog window isn't maximized
+        dialog.setWindowState(Qt.WindowNoState)
+
+        # Execute the dialog and check the user's action
+        if dialog.exec() == QFileDialog.Accepted:
+            selectedFiles = dialog.selectedFiles()
+            if selectedFiles:
+                file_name = selectedFiles[0]
+                lineEdit.setText(file_name)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -293,41 +331,72 @@ class MainApp(QMainWindow):
             print("No file selected.")
 
     def executeRegistration(self):
-        sourceFilePath = self.loadFileLineEdit.text()  # Use the getFilePath method from FileChooserWidget
-        referenceFilePath = self.loadRefFileLineEdit.text()  # Use the getFilePath method from FileChooserWidget
+        self.startLoadingAnimation()
+        sourceFilePath = self.loadFileLineEdit.text()
+        referenceFilePath = self.loadRefFileLineEdit.text()
 
-        # Ensure both source and reference paths are provided
         if not sourceFilePath or not referenceFilePath:
             self.registrationLogLabel.setText("Source or reference file path is missing.")
+            self.stopLoadingAnimation()
             return
 
-        # Load the source point cloud and reference model
-        sourcePcd = load_pcd(sourceFilePath)
-        # Assuming load_pcd works for your reference file format; otherwise, adjust accordingly
+        # Setup the thread and worker
+        self.thread = QThread()
+        self.worker = RegistrationWorker(sourceFilePath, referenceFilePath)
+        self.worker.moveToThread(self.thread)
+        self.worker.finished.connect(self.handleRegistrationComplete)
+        self.worker.error.connect(self.handleRegistrationError)
+        self.thread.started.connect(self.worker.run)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.error.connect(self.worker.deleteLater)
 
-        # Initialize the registration process
-        registration = PointCloudRegistration(source=sourcePcd, target=referenceFilePath)
-        
-        # Perform registration with predefined parameters
-        # Assuming `registration.register()` now also returns a log text
-        pcd_registered, transformation, log_text = registration.register(desired_fitness_ransac=0.85, desired_fitness_icp=[0.65, 0.75, 0.85])
+        self.thread.start()
 
-        # Example: After calculating the transformation matrix
-        self.transformationMatrixText = str(transformation)
-        self.registrationLogLabel.append("Registration completed. Transformation Matrix:\n" + self.transformationMatrixText)
+    def handleRegistrationComplete(self, transformation, log_text):
+        self.stopLoadingAnimation()
+        self.transformationMatrixText = transformation
+        # self.registrationLogLabel.setText(f"Registration completed. Transformation Matrix:\n{transformation}\n{log_text}")
+        self.registrationLogLabel.setText(f"{log_text}")
 
-        # Display the log text in the QLabel
-        self.registrationLogLabel.setText(log_text)
-        
-        # Process the registered point cloud as needed
-        print("Registration completed.")
-        # For example, update the visualization or inform the user of the completion
+    def handleRegistrationError(self, error_message):
+        self.stopLoadingAnimation()
+        self.registrationLogLabel.setText(f"Registration failed: {error_message}")
+
+    def startLoadingAnimation(self):
+        self.loadingLabel.show()
+        self.loadingMovie.start()
+
+    def stopLoadingAnimation(self):
+        self.loadingMovie.stop()
+        self.loadingLabel.hide()
 
     def copyTransformationToClipboard(self):
         clipboard = QGuiApplication.clipboard()
         transformation_text = self.transformationMatrixText  # Ensure this contains the transformation matrix text
         clipboard.setText(transformation_text)
         print("Transformation matrix copied to clipboard.")
+
+class RegistrationWorker(QObject):
+    finished = Signal(str, str)  # To signal completion with the log text and transformation matrix
+    error = Signal(str)  # To signal if an error occurs
+
+    def __init__(self, sourcePath, referencePath):
+        super().__init__()
+        self.sourcePath = sourcePath
+        self.referencePath = referencePath
+
+    @Slot()
+    def run(self):
+        try:
+            sourcePcd = load_pcd(self.sourcePath)
+            registration = PointCloudRegistration(source=sourcePcd, target=self.referencePath)
+            pcd_registered, transformation, log_text = registration.register(desired_fitness_ransac=0.85, desired_fitness_icp=[0.65, 0.75, 0.85])
+            self.finished.emit(str(transformation), log_text)
+        except Exception as e:
+            self.error.emit(str(e))
 
 if __name__ == "__main__":
     app = QApplication([])
