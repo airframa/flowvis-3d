@@ -332,8 +332,8 @@ class PointCloudRegistration(PointCloudPreprocessor):
         self.transformation = best_registration.transformation
 
         # Enable registration visualization
-        # log_text += "Registered point cloud:"
-        PointCloudVisualizer(input_clouds=self.registered_pcd, target_path=change_file_ext(self.target_path))
+        # # log_text += "Registered point cloud:"
+        # PointCloudVisualizer(input_clouds=self.registered_pcd, target_path=change_file_ext(self.target_path))
 
         return self.registered_pcd, best_registration.transformation, log_text # Return the registered point cloud and the transfromation matrix
     
