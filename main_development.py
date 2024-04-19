@@ -145,12 +145,15 @@ class MainApp(QMainWindow):
         self.setWindowTitle("FlowVis3D")
         self.setAcceptDrops(True)
         self.setupUI()
+        self.registrationThread = None
+        self.registrationWorker = None
         self.visualizationThread = None
         self.visualizationWorker = None
         self.reference_geometry = None
         self.cached_reference_path = None
         self.registered_pcd = None  # Assuming this holds your registered point cloud
         self.transformation = None  # Assuming this holds the transformation used in registration
+        self.workerIsActive = False  # Flag to track if the worker is active
 
     def setupUI(self):
         centralWidget = QWidget(self)
@@ -312,21 +315,20 @@ class MainApp(QMainWindow):
         # # Insert the wheel layout into the registration section's layout
         # registrationSection.contentLayout().addLayout(wheelLayout2)
 
+        # Preprocessing Section (placeholder)
+        preprocessSection = CollapsibleSection("Pre-process", self)
+        layout.addWidget(preprocessSection)
+        # Populate preprocessSection.contentLayout() as needed in the future
 
-        # # Preprocessing Section (placeholder)
-        # preprocessSection = CollapsibleSection("Pre-process", self)
-        # layout.addWidget(preprocessSection)
-        # # Populate preprocessSection.contentLayout() as needed in the future
+        # Segmentation Section (placeholder)
+        segmentSection = CollapsibleSection("Segment", self)
+        layout.addWidget(segmentSection)
+        # Populate segmentSection.contentLayout() as needed in the future
 
-        # # Segmentation Section (placeholder)
-        # segmentSection = CollapsibleSection("Segment", self)
-        # layout.addWidget(segmentSection)
-        # # Populate segmentSection.contentLayout() as needed in the future
-
-        # # Segmentation Section (placeholder)
-        # rasterSection = CollapsibleSection("Raster", self)
-        # layout.addWidget(rasterSection)
-        # # Populate rasterSection.contentLayout() as needed in the future
+        # Segmentation Section (placeholder)
+        rasterSection = CollapsibleSection("Raster", self)
+        layout.addWidget(rasterSection)
+        # Populate rasterSection.contentLayout() as needed in the future
 
         self.show()
 
@@ -396,34 +398,55 @@ class MainApp(QMainWindow):
             print("No file selected.")
 
     def executeRegistration(self):
+        # Ensure previous worker and thread are properly cleaned up
+        if self.registrationThread is not None:
+            if self.registrationThread.isRunning():
+                self.registrationThread.quit()
+                self.registrationThread.wait()
+
         self.startLoadingAnimation()
         sourceFilePath = self.loadFileLineEdit.text()
         referenceFilePath = self.loadRefFileLineEdit.text()
 
-        if not sourceFilePath or not referenceFilePath:
-            self.registrationLogLabel.setText("Source or reference file path is missing.")
-            self.stopLoadingAnimation()
-            return
+        # Create new worker and thread
+        self.registrationWorker = RegistrationWorker(sourceFilePath, referenceFilePath, self)
+        self.registrationThread = QThread()
+        self.registrationWorker.moveToThread(self.registrationThread)
 
-        # Setup the thread and worker
-        self.thread = QThread()
-        # Pass a reference to self when initializing the RegistrationWorker
-        self.worker = RegistrationWorker(sourceFilePath, referenceFilePath, self)
-        self.worker.moveToThread(self.thread)
-        self.worker.finished.connect(self.handleRegistrationComplete)
-        self.worker.error.connect(self.handleRegistrationError)
-        self.thread.started.connect(self.worker.run)
-        self.thread.finished.connect(self.thread.deleteLater)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.error.connect(self.worker.deleteLater)
-        self.thread.start()
+        # Connect the worker's 'finished' signal to the 'handleRegistrationComplete' slot
+        self.registrationWorker.finished.connect(self.handleRegistrationComplete)
+        self.registrationWorker.error.connect(self.handleRegistrationError)
+
+        self.registrationThread.started.connect(self.registrationWorker.run)
+        self.registrationThread.finished.connect(self.registrationThread.deleteLater)
+
+        self.registrationThread.start()
+
+    def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
+        self.stopLoadingAnimation()
+        self.registrationLogLabel.setText(log_text)
+        
+        self.registered_pcd = pcd_registered
+        self.transformation = transformation  # Store transformation if needed elsewhere
+        
+        # Enable buttons or perform other actions now that registration is complete
+        print("Registration completed and data stored.")
+
+        self.visualizeRegisteredButton.setEnabled(True)  # Assuming this button should be enabled now
+        self.saveDataButton.setEnabled(True)  # Enable the save button
+
+
+
+    def handleRegistrationError(self, error_message):
+        self.stopLoadingAnimation()
+        self.registrationLogLabel.setText(f"Registration failed: {error_message}")
+        # Additional error handling
 
     def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
         self.stopLoadingAnimation()
         self.transformationMatrixText = transformation
         self.pcd_registered = pcd_registered  # Store the registered point cloud
         self.registrationLogLabel.setText(f"{log_text}")
-
 
     def handleRegistrationError(self, error_message):
         self.stopLoadingAnimation()
@@ -446,44 +469,35 @@ class MainApp(QMainWindow):
     def visualizeRegisteredPointCloud(self):
         current_path = self.loadRefFileLineEdit.text()
         if current_path != self.cached_reference_path or self.reference_geometry is None:
-            # Invalidate cached geometry if the path changes
             self.reference_geometry = None
             self.cached_reference_path = current_path
             
+            # Make sure any ongoing visualization is properly cleaned up before starting a new one
             self.tearDownVisualizationInfrastructure()
 
-            # Initialize a new worker and thread
+            # Set up a new visualization worker
             self.setupVisualizationWorker(current_path)
         else:
             # If the geometry is already loaded and the path hasn't changed, visualize directly
             self.visualizeData(self.reference_geometry)
 
     def setupVisualizationWorker(self, path):
-        if self.visualizationThread and self.visualizationThread.isRunning():
-            self.visualizationThread.quit()
-            self.visualizationThread.wait()
-
-        if self.visualizationWorker:
-            # Disconnect all connections
-            try:
-                self.visualizationWorker.dataLoaded.disconnect()
-                self.visualizationWorker.error.disconnect()
-                self.visualizationWorker.finished.disconnect()
-            except RuntimeError as e:
-                print(f"Failed to disconnect signals: {str(e)}")
-            finally:
-                self.visualizationWorker.deleteLater()
-                self.visualizationWorker = None
+        # Clean up any existing worker and thread first
+        self.tearDownVisualizationInfrastructure()
 
         self.visualizationWorker = VisualizationWorker(path)
         self.visualizationThread = QThread()
+
+        # Move the worker to the thread
         self.visualizationWorker.moveToThread(self.visualizationThread)
 
+        # Connect signals
         self.visualizationWorker.dataLoaded.connect(self.cacheAndVisualizeData)
         self.visualizationWorker.error.connect(self.handleVisualizationError)
         self.visualizationWorker.finished.connect(self.visualizationWorker.deleteLater)
         self.visualizationWorker.finished.connect(self.visualizationThread.quit)
 
+        # Start the thread
         self.visualizationThread.started.connect(self.visualizationWorker.run)
         self.visualizationThread.finished.connect(self.visualizationThread.deleteLater)
 
@@ -491,21 +505,18 @@ class MainApp(QMainWindow):
 
     def tearDownVisualizationInfrastructure(self):
         if self.visualizationWorker:
-            # Safely disconnect signals only if the worker exists
-            try:
-                self.visualizationWorker.dataLoaded.disconnect()
-                self.visualizationWorker.error.disconnect()
-                self.visualizationWorker.finished.disconnect()
-            except RuntimeError as e:
-                print(f"Error while disconnecting signals: {e}")
-            finally:
-                # Safely attempt to delete the worker
+            if self.visualizationWorker.active:
+                # Disconnect signals
                 try:
-                    self.visualizationWorker.deleteLater()
+                    self.visualizationWorker.dataLoaded.disconnect()
+                    self.visualizationWorker.error.disconnect()
+                    self.visualizationWorker.finished.disconnect()
                 except RuntimeError as e:
-                    print(f"Error while deleting worker: {e}")
-                self.visualizationWorker = None
-            
+                    print(f"Error while disconnecting signals: {e}")
+            # Delete the worker safely
+            self.visualizationWorker.deleteLater()
+            self.visualizationWorker = None
+
         if self.visualizationThread:
             if self.visualizationThread.isRunning():
                 self.visualizationThread.quit()
@@ -533,6 +544,7 @@ class MainApp(QMainWindow):
 
     def initiateSaveData(self):
         file_path = self.loadFileLineEdit.text()
+        print(self.registered_pcd)
         if not file_path:
             QMessageBox.warning(self, "Warning", "No file selected. Please load a point cloud first.")
             return
@@ -598,50 +610,85 @@ class MainApp(QMainWindow):
     #     self.registrationLogLabel.setText(f"Visualization failed: {error_message}")
     #     self.stopVisualizationLoadingAnimation()
 
+
 class RegistrationWorker(QObject):
-    finished = Signal(object, str, str)  # Signal for when the process is finished
-    error = Signal(str)  # Signal for when an error occurs
+    finished = Signal(object, str, str)  # Emitted with the registered point cloud, transformation matrix, and log message
+    error = Signal(str)                 # Emitted with error message
+    requestStop = Signal()
+    active = False                      # Attribute to manage active state
 
     def __init__(self, sourcePath, referencePath, main_app):
         super(RegistrationWorker, self).__init__()
         self.sourcePath = sourcePath
         self.referencePath = referencePath
-        self.main_app = main_app  # Reference to the main application
+        self.main_app = main_app
+        self.active = True
+
+    def stop(self):
+        if self.active:
+            self.active = False  # Set active to False to stop any ongoing processes safely
 
     @Slot()
     def run(self):
+        if not self.active:
+            return
         try:
-            sourcePcd = load_pcd(self.sourcePath)
-            registration = PointCloudRegistration(source=sourcePcd, target=self.referencePath)
-            pcd_registered, transformation, log_text = registration.register(desired_fitness_ransac=0.85, desired_fitness_icp=[0.65, 0.75, 0.85])
-            # Store results in the main application context
-            self.main_app.registered_pcd = pcd_registered
-            self.main_app.transformation = transformation
-            self.finished.emit(pcd_registered, str(transformation), log_text)
+            source_pcd = load_pcd(self.sourcePath)
+            reference_pcd = load_pcd(self.referencePath)
+            registration = PointCloudRegistration(source=source_pcd, target=reference_pcd)
+
+            # Assume 'register' method returns a tuple of (registered_pcd, transformation_matrix, log_text)
+            pcd_registered, transformation, log_text = registration.register(
+                desired_fitness_ransac=0.85,
+                desired_fitness_icp=[0.65, 0.75, 0.85]
+            )
+
+            if self.active:
+                # Emit the successful registration results
+                self.finished.emit(pcd_registered, str(transformation), log_text)
         except Exception as e:
-            self.error.emit(str(e))
+            if self.active:
+                self.error.emit(str(e))
+        finally:
+            self.active = False  # Ensure the worker is marked as inactive
+
+    def deleteLater(self):
+        if self.active:
+            self.requestStop.emit()  # Ensure stop is requested before deletion
+        super(RegistrationWorker, self).deleteLater()
 
 
 class VisualizationWorker(QObject):
     dataLoaded = Signal(object)  # Emitted when data is loaded successfully
     error = Signal(str)          # Emitted on error
     finished = Signal()          # Emitted when processing is complete
+    active = False               # Manage the active state
 
     def __init__(self, reference_path):
         super(VisualizationWorker, self).__init__()
         self.reference_path = reference_path
+        self.active = True
 
     @Slot()
     def run(self):
+        if not self.active:
+            return
         try:
-            # Your loading and processing logic here
+            # Assuming this loads a mesh or point cloud
             reference_geom = o3d.io.read_triangle_mesh(self.reference_path)
             reference_geom.compute_vertex_normals()
-            self.dataLoaded.emit(reference_geom)  # Emit loaded geometry
-            self.finished.emit()  # Emit when done
+            if self.active:
+                self.dataLoaded.emit(reference_geom)  # Emit loaded geometry
         except Exception as e:
-            self.error.emit(str(e))
-            self.finished.emit()  # Ensure finished is emitted even on error
+            if self.active:
+                self.error.emit(str(e))
+        finally:
+            self.active = False
+
+    def deleteLater(self):
+        if self.active:
+            self.active = False  # Ensure no more operations are executed
+        super(VisualizationWorker, self).deleteLater()
 
 class SaveWorker(QObject):
     finished = Signal()

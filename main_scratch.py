@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox
 from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication, QMovie
 from PySide6.QtCore import Qt, QTimer, QObject, Signal, Slot, QThread
 from IPython.display import clear_output
@@ -143,8 +143,14 @@ class MainApp(QMainWindow):
     def __init__(self):
         super(MainApp, self).__init__()
         self.setWindowTitle("FlowVis3D")
-        self.setAcceptDrops(True)  # Enable drag and drop for the main window
+        self.setAcceptDrops(True)
         self.setupUI()
+        self.visualizationThread = None
+        self.visualizationWorker = None
+        self.reference_geometry = None
+        self.cached_reference_path = None
+        self.registered_pcd = None  # Assuming this holds your registered point cloud
+        self.transformation = None  # Assuming this holds the transformation used in registration
 
     def setupUI(self):
         centralWidget = QWidget(self)
@@ -154,6 +160,7 @@ class MainApp(QMainWindow):
         # Load and display the logo at the top
         self.logoLabel = QLabel()
         self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(580, 580, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        # self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(500, 500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.logoLabel.setPixmap(self.logoPixmap)
         self.logoLabel.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logoLabel)
@@ -228,7 +235,6 @@ class MainApp(QMainWindow):
         # Insert the wheel layout into the registration section's layout
         registrationSection.contentLayout().addLayout(wheelLayout)
 
-
        # Registration logs display with combined text area and scrollbar style
         self.registrationLogLabel = QTextEdit()
         self.registrationLogLabel.setReadOnly(True)
@@ -246,10 +252,65 @@ class MainApp(QMainWindow):
         self.copyMatrixButton.clicked.connect(self.copyTransformationToClipboard)
         registrationSection.contentLayout().addWidget(self.copyMatrixButton)
 
+        # Visualization Registered Button
         self.visualizeRegisteredButton = QPushButton("Visualize Registered Point Cloud")
         applyButtonStyle(self.visualizeRegisteredButton)
         self.visualizeRegisteredButton.clicked.connect(self.visualizeRegisteredPointCloud)
         registrationSection.contentLayout().addWidget(self.visualizeRegisteredButton)
+
+        # Save Data
+        self.saveDataButton = QPushButton("Save Data")
+        applyButtonStyle(self.saveDataButton)
+        self.saveDataButton.clicked.connect(self.initiateSaveData)
+        registrationSection.contentLayout().addWidget(self.saveDataButton)
+
+        # Spinning wheel setup
+        wheelLayout2 = QHBoxLayout()
+        wheelLayout2.addStretch()  # Add stretch to push everything to the center
+
+        self.loadingLabel2 = QLabel()
+        self.loadingMovie2 = QMovie("./ui/spinning_wheel_v2_60.gif")
+        self.loadingLabel2.setMovie(self.loadingMovie2)
+        self.loadingLabel2.setAlignment(Qt.AlignCenter)
+        self.loadingLabel2.setFixedSize(25, 25)
+        self.loadingMovie2.setScaledSize(self.loadingLabel2.size())
+        self.loadingLabel2.hide()
+
+        wheelLayout2.addWidget(self.loadingLabel2)
+        wheelLayout2.addStretch()  # Add stretch to ensure the label is centered
+
+        # Insert the wheel layout into the registration section's layout
+        registrationSection.contentLayout().addLayout(wheelLayout2)
+
+        # Registration logs display with combined text area and scrollbar style
+        self.saveLogLabel = QTextEdit()
+        self.saveLogLabel.setReadOnly(True)
+        self.saveLogLabel.setWordWrapMode(QTextOption.WrapAnywhere)
+        self.saveLogLabel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show vertical scrollbar only when needed
+        self.saveLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show horizontal scrollbar only when needed
+        applyTextAndScrollBarStyle(self.saveLogLabel)  # Apply combined styles
+        self.saveLogLabel.setFixedHeight(75)
+        registrationSection.contentLayout().addWidget(self.saveLogLabel)
+
+        # Spinning wheel setup for the visualization process
+        # # Spinning wheel setup
+        # wheelLayout2 = QHBoxLayout()
+        # wheelLayout2.addStretch()  # Add stretch to push everything to the center
+
+        # self.visualizationLoadingLabel = QLabel()
+        # self.visualizationLoadingMovie = QMovie("./ui/spinning_wheel_v2_60.gif")
+        # self.visualizationLoadingLabel.setMovie(self.visualizationLoadingMovie)
+        # self.visualizationLoadingLabel.setAlignment(Qt.AlignCenter)
+        # self.visualizationLoadingLabel.setFixedSize(25, 25)
+        # self.visualizationLoadingMovie.setScaledSize(self.visualizationLoadingLabel.size())
+        # self.visualizationLoadingLabel.hide()  # Initially hidden
+        # # registrationSection.contentLayout().addWidget(self.visualizationLoadingLabel)
+
+        # wheelLayout2.addWidget(self.visualizationLoadingLabel)
+        # wheelLayout2.addStretch()  # Add stretch to ensure the label is centered
+
+        # # Insert the wheel layout into the registration section's layout
+        # registrationSection.contentLayout().addLayout(wheelLayout2)
 
         # # Preprocessing Section (placeholder)
         # preprocessSection = CollapsibleSection("Pre-process", self)
@@ -269,29 +330,25 @@ class MainApp(QMainWindow):
         self.show()
 
     def openFileDialog(self, lineEdit, initial_dir):
-        # Create a new QFileDialog instance every time
         dialog = QFileDialog(self, "Select Point Cloud File")
         dialog.setDirectory(initial_dir)
         dialog.setNameFilter("Point Cloud Files (*.ply *.stl);;All Files (*)")
         dialog.setFileMode(QFileDialog.ExistingFile)
         dialog.setViewMode(QFileDialog.Detail)
-
-        # Setting modality to application modal
         dialog.setModal(True)
-
-        # Attempting again to control the size
         dialog.resize(800, 600)
         dialog.setMinimumSize(800, 600)
-
-        # Ensure the dialog window isn't maximized
         dialog.setWindowState(Qt.WindowNoState)
 
-        # Execute the dialog and check the user's action
         if dialog.exec() == QFileDialog.Accepted:
             selectedFiles = dialog.selectedFiles()
             if selectedFiles:
                 file_name = selectedFiles[0]
                 lineEdit.setText(file_name)
+                if lineEdit is self.loadFileLineEdit:
+                    self.visualizeButton.setDisabled(False)  # Enable visualization button when file is selected
+                if lineEdit is self.loadRefFileLineEdit:
+                    self.visualizeRegisteredButton.setDisabled(False)  # Enable registration button when reference is selected
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -349,17 +406,15 @@ class MainApp(QMainWindow):
 
         # Setup the thread and worker
         self.thread = QThread()
-        self.worker = RegistrationWorker(sourceFilePath, referenceFilePath)  # Corrected here
+        # Pass a reference to self when initializing the RegistrationWorker
+        self.worker = RegistrationWorker(sourceFilePath, referenceFilePath, self)
         self.worker.moveToThread(self.thread)
         self.worker.finished.connect(self.handleRegistrationComplete)
         self.worker.error.connect(self.handleRegistrationError)
         self.thread.started.connect(self.worker.run)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.error.connect(self.thread.quit)
         self.worker.error.connect(self.worker.deleteLater)
-
         self.thread.start()
 
     def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
@@ -387,54 +442,170 @@ class MainApp(QMainWindow):
         clipboard.setText(transformation_text)
         print("Transformation matrix copied to clipboard.")
 
-    # Inside your QMainWindow subclass:
     def visualizeRegisteredPointCloud(self):
-        self.startLoadingAnimation()  # Show the spinning wheel
-        reference_path = self.loadRefFileLineEdit.text()
-        base, ext = os.path.splitext(reference_path)
-        stl_path = base + ".stl"
-        if ext.lower() == ".ply" and os.path.exists(stl_path):
-            reference_path = stl_path
+        current_path = self.loadRefFileLineEdit.text()
+        if current_path != self.cached_reference_path or self.reference_geometry is None:
+            # Invalidate cached geometry if the path changes
+            self.reference_geometry = None
+            self.cached_reference_path = current_path
+            
+            self.tearDownVisualizationInfrastructure()
 
+            # Initialize a new worker and thread
+            self.setupVisualizationWorker(current_path)
+        else:
+            # If the geometry is already loaded and the path hasn't changed, visualize directly
+            self.visualizeData(self.reference_geometry)
+
+    def setupVisualizationWorker(self, path):
+        if self.visualizationThread and self.visualizationThread.isRunning():
+            self.visualizationThread.quit()
+            self.visualizationThread.wait()
+
+        if self.visualizationWorker:
+            # Disconnect all connections
+            try:
+                self.visualizationWorker.dataLoaded.disconnect()
+                self.visualizationWorker.error.disconnect()
+                self.visualizationWorker.finished.disconnect()
+            except RuntimeError as e:
+                print(f"Failed to disconnect signals: {str(e)}")
+            finally:
+                self.visualizationWorker.deleteLater()
+                self.visualizationWorker = None
+
+        self.visualizationWorker = VisualizationWorker(path)
+        self.visualizationThread = QThread()
+        self.visualizationWorker.moveToThread(self.visualizationThread)
+
+        self.visualizationWorker.dataLoaded.connect(self.cacheAndVisualizeData)
+        self.visualizationWorker.error.connect(self.handleVisualizationError)
+        self.visualizationWorker.finished.connect(self.visualizationWorker.deleteLater)
+        self.visualizationWorker.finished.connect(self.visualizationThread.quit)
+
+        self.visualizationThread.started.connect(self.visualizationWorker.run)
+        self.visualizationThread.finished.connect(self.visualizationThread.deleteLater)
+
+        self.visualizationThread.start()
+
+    def tearDownVisualizationInfrastructure(self):
+        if self.visualizationWorker:
+            # Safely disconnect signals only if the worker exists
+            try:
+                self.visualizationWorker.dataLoaded.disconnect()
+                self.visualizationWorker.error.disconnect()
+                self.visualizationWorker.finished.disconnect()
+            except RuntimeError as e:
+                print(f"Error while disconnecting signals: {e}")
+            finally:
+                # Safely attempt to delete the worker
+                try:
+                    self.visualizationWorker.deleteLater()
+                except RuntimeError as e:
+                    print(f"Error while deleting worker: {e}")
+                self.visualizationWorker = None
+            
+        if self.visualizationThread:
+            if self.visualizationThread.isRunning():
+                self.visualizationThread.quit()
+                self.visualizationThread.wait()
+            self.visualizationThread.deleteLater()
+            self.visualizationThread = None
+
+    def cacheAndVisualizeData(self, reference_geom):
+        self.reference_geometry = reference_geom
+        self.visualizeData(reference_geom)
+
+    def visualizeData(self, reference_geom):
         try:
-            registered_pcd = self.pcd_registered  # Use the stored registered point cloud
-            reference_geom = o3d.io.read_triangle_mesh(reference_path)
-            reference_geom.compute_vertex_normals()
-
-            # Setup threading for visualization
-            self.visualizationThread = QThread()
-            self.visualizationWorker = VisualizationWorker(registered_pcd, reference_geom)
-            self.visualizationWorker.moveToThread(self.visualizationThread)
-            self.visualizationWorker.finished.connect(self.visualizationThread.quit)
-            self.visualizationWorker.finished.connect(self.visualizationWorker.deleteLater)
-            self.visualizationThread.finished.connect(self.visualizationThread.deleteLater)
-            self.visualizationWorker.error.connect(self.handleVisualizationError)
-            self.visualizationThread.started.connect(self.visualizationWorker.run)
-            self.visualizationThread.start()
+            vis = o3d.visualization.Visualizer()
+            vis.create_window()
+            vis.add_geometry(self.pcd_registered)  # Registered point cloud
+            vis.add_geometry(reference_geom)       # Loaded reference geometry
+            vis.run()
+            vis.destroy_window()
         except Exception as e:
-            self.registrationLogLabel.setText(f"Error preparing visualization: {e}")
-            self.stopLoadingAnimation()  # Stop the spinning wheel if an error occurs before threading starts
+            self.handleVisualizationError(str(e))
 
     def handleVisualizationError(self, error_message):
-        self.registrationLogLabel.setText(f"Visualization failed: {error_message}")
-        self.stopLoadingAnimation()
+        print(f"Visualization Error: {error_message}")
 
-    def startLoadingAnimation(self):
-        self.loadingLabel.show()
-        self.loadingMovie.start()
+    def initiateSaveData(self):
+        file_path = self.loadFileLineEdit.text()
+        if not file_path:
+            QMessageBox.warning(self, "Warning", "No file selected. Please load a point cloud first.")
+            return
+        if not self.registered_pcd:
+            QMessageBox.warning(self, "Warning", "No registered point cloud available. Perform registration first.")
+            return
 
-    def stopLoadingAnimation(self):
-        self.loadingMovie.stop()
-        self.loadingLabel.hide()
+        # Start the save operation in a new thread
+        self.saveThread = QThread()
+        self.saveWorker = SaveWorker(file_path, self.registered_pcd, self.transformation, save_mesh=True)
+        self.saveWorker.moveToThread(self.saveThread)
+        
+        # Connect signals to slots
+        self.saveWorker.finished.connect(self.saveThread.quit)
+        self.saveWorker.finished.connect(self.saveWorker.deleteLater)
+        self.saveWorker.finished.connect(self.stopSaveLoadingAnimation)  # Stop animation when finished
+        self.saveWorker.error.connect(lambda error: QMessageBox.critical(self, "Error", f"An error occurred: {error}"))
+        self.saveWorker.error.connect(self.stopSaveLoadingAnimation)  # Stop animation on error
+        self.saveWorker.log_message.connect(self.appendLog)  # Connect log message signal
+
+        # Start spinning animation and thread
+        self.startSaveLoadingAnimation()  # Start animation when save is initiated
+        self.saveThread.started.connect(self.saveWorker.run)
+        self.saveThread.finished.connect(self.saveThread.deleteLater)
+        
+        self.saveThread.start()
+
+    def appendLog(self, message):
+        self.saveLogLabel.append(message)  # Append message to the QTextEdit
+
+    def startSaveLoadingAnimation(self):
+        self.loadingLabel2.show()
+        self.loadingMovie2.start()
+
+    def stopSaveLoadingAnimation(self):
+        self.loadingMovie2.stop()
+        self.loadingLabel2.hide()
+
+
+    # Optionally, reset any progress indicators
+    # self.progressBar.reset()  # If you have a progress bar, reset it
+    # self.statusLabel.setText("Ready to start a new session")  # Reset status label if exists
+
+
+    # def removeVisualizationLoadingAnimation(self):
+    #     print("Removing the loading animation...")  # Debug print
+    #     if self.visualizationLoadingLabel.isVisible():
+    #         self.visualizationLoadingMovie.stop()
+    #         self.visualizationLoadingLabel.hide()  # Directly remove the spinning wheel
+
+    # def startVisualizationLoadingAnimation(self):
+    #     print("Starting the loading animation...")  # Debug print
+    #     self.visualizationLoadingLabel.show()
+    #     self.visualizationLoadingMovie.start()
+
+    # def stopVisualizationLoadingAnimation(self):
+    #     print("Stopping the loading animation...")  # Debug print
+    #     self.visualizationLoadingMovie.stop()
+    #     self.visualizationLoadingLabel.hide()  # Hide the QLabel
+
+    # def handleVisualizationError(self, error_message):
+    #     print("Visualization Error:", error_message)  # Debug print
+    #     self.registrationLogLabel.setText(f"Visualization failed: {error_message}")
+    #     self.stopVisualizationLoadingAnimation()
 
 class RegistrationWorker(QObject):
     finished = Signal(object, str, str)  # Signal for when the process is finished
     error = Signal(str)  # Signal for when an error occurs
 
-    def __init__(self, sourcePath, referencePath):
+    def __init__(self, sourcePath, referencePath, main_app):
         super(RegistrationWorker, self).__init__()
         self.sourcePath = sourcePath
         self.referencePath = referencePath
+        self.main_app = main_app  # Reference to the main application
 
     @Slot()
     def run(self):
@@ -442,34 +613,86 @@ class RegistrationWorker(QObject):
             sourcePcd = load_pcd(self.sourcePath)
             registration = PointCloudRegistration(source=sourcePcd, target=self.referencePath)
             pcd_registered, transformation, log_text = registration.register(desired_fitness_ransac=0.85, desired_fitness_icp=[0.65, 0.75, 0.85])
+            # Store results in the main application context
+            self.main_app.registered_pcd = pcd_registered
+            self.main_app.transformation = transformation
             self.finished.emit(pcd_registered, str(transformation), log_text)
         except Exception as e:
             self.error.emit(str(e))
-            
-class VisualizationWorker(QObject):
-    finished = Signal()
-    error = Signal(str)
 
-    def __init__(self, registered_pcd, reference_geom):
-        super().__init__()
-        self.registered_pcd = registered_pcd
-        self.reference_geom = reference_geom
+
+class VisualizationWorker(QObject):
+    dataLoaded = Signal(object)  # Emitted when data is loaded successfully
+    error = Signal(str)          # Emitted on error
+    finished = Signal()          # Emitted when processing is complete
+
+    def __init__(self, reference_path):
+        super(VisualizationWorker, self).__init__()
+        self.reference_path = reference_path
 
     @Slot()
     def run(self):
         try:
-            vis = o3d.visualization.Visualizer()
-            vis.create_window()
-            vis.add_geometry(self.registered_pcd)
-            vis.add_geometry(self.reference_geom)
-            render_option = vis.get_render_option()
-            render_option.point_size = 3.0
-            render_option.point_show_normal = False
-            vis.run()
-            vis.destroy_window()
-            self.finished.emit()
+            # Your loading and processing logic here
+            reference_geom = o3d.io.read_triangle_mesh(self.reference_path)
+            reference_geom.compute_vertex_normals()
+            self.dataLoaded.emit(reference_geom)  # Emit loaded geometry
+            self.finished.emit()  # Emit when done
         except Exception as e:
             self.error.emit(str(e))
+            self.finished.emit()  # Ensure finished is emitted even on error
+
+class SaveWorker(QObject):
+    finished = Signal()
+    error = Signal(str)
+    log_message = Signal(str)  # Signal to send log messages
+
+    def __init__(self, file_path, registered_pcd, transformation, save_mesh=False):
+        super(SaveWorker, self).__init__()
+        self.file_path = file_path
+        self.registered_pcd = registered_pcd
+        self.transformation = transformation
+        self.save_mesh = save_mesh
+
+    @Slot()
+    def run(self):
+        try:
+            if self.registered_pcd is not None:
+                output_file_raw = self.file_path.replace('.ply', '_registered.ply')
+                output_file_scaled = self.file_path.replace('.ply', '_registered_paraview.ply')
+                o3d.io.write_point_cloud(output_file_raw, self.registered_pcd)
+
+                scale = 1 / 600
+                self.registered_pcd.scale(scale, center=(0, 0, 0))
+                o3d.io.write_point_cloud(output_file_scaled, self.registered_pcd)
+
+                saved_files = [
+                    "original registered point cloud",
+                    "CFD-scaled registered point cloud"
+                ]
+
+                if self.save_mesh:
+                    mesh = o3d.io.read_triangle_mesh(self.file_path)
+                    if mesh is not None:
+                        mesh.transform(self.transformation)
+                        mesh.scale(scale, center=(0, 0, 0))
+                        output_mesh_file = self.file_path.replace('.ply', '_registered_mesh_paraview.ply')
+                        o3d.io.write_triangle_mesh(output_mesh_file, mesh)
+                        saved_files.append("CFD-scaled registered mesh")
+                    else:
+                        QMessageBox.warning(self, "Warning", "No mesh data avilable for the current .ply file.")
+                
+                # Use the directory path
+                directory_path = os.path.dirname(self.file_path)
+                summary_message = f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
+                self.log_message.emit(summary_message)
+            else:
+                self.log_message.emit("No registered point cloud available. Perform registration first.")
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
+
 
 if __name__ == "__main__":
     app = QApplication([])
@@ -488,5 +711,3 @@ if __name__ == "__main__":
 
     window = MainApp()
     app.exec()
-
-
