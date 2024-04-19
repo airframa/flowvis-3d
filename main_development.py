@@ -162,8 +162,8 @@ class MainApp(QMainWindow):
 
         # Load and display the logo at the top
         self.logoLabel = QLabel()
-        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(580, 580, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        # self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(500, 500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        # self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(580, 580, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.logoLabel.setPixmap(self.logoPixmap)
         self.logoLabel.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logoLabel)
@@ -413,28 +413,24 @@ class MainApp(QMainWindow):
         self.registrationThread = QThread()
         self.registrationWorker.moveToThread(self.registrationThread)
 
-        # Connect the worker's 'finished' signal to the 'handleRegistrationComplete' slot
+        # Connect the finished signal to the handler
+        print("Connecting signals")
         self.registrationWorker.finished.connect(self.handleRegistrationComplete)
         self.registrationWorker.error.connect(self.handleRegistrationError)
 
+        # Setup and start the thread
         self.registrationThread.started.connect(self.registrationWorker.run)
         self.registrationThread.finished.connect(self.registrationThread.deleteLater)
-
         self.registrationThread.start()
 
     def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
+        print("Registration complete slot triggered.")
+        print("Received data:", pcd_registered)
         self.stopLoadingAnimation()
         self.registrationLogLabel.setText(log_text)
-        
         self.registered_pcd = pcd_registered
-        self.transformation = transformation  # Store transformation if needed elsewhere
-        
-        # Enable buttons or perform other actions now that registration is complete
-        print("Registration completed and data stored.")
-
-        self.visualizeRegisteredButton.setEnabled(True)  # Assuming this button should be enabled now
-        self.saveDataButton.setEnabled(True)  # Enable the save button
-
+        self.transformation = transformation
+        print("Data stored in MainApp immediately after registration:", self.registered_pcd)
 
 
     def handleRegistrationError(self, error_message):
@@ -442,11 +438,11 @@ class MainApp(QMainWindow):
         self.registrationLogLabel.setText(f"Registration failed: {error_message}")
         # Additional error handling
 
-    def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
-        self.stopLoadingAnimation()
-        self.transformationMatrixText = transformation
-        self.pcd_registered = pcd_registered  # Store the registered point cloud
-        self.registrationLogLabel.setText(f"{log_text}")
+    # def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
+    #     self.stopLoadingAnimation()
+    #     self.transformationMatrixText = transformation
+    #     self.pcd_registered = pcd_registered  # Store the registered point cloud
+    #     self.registrationLogLabel.setText(f"{log_text}")
 
     def handleRegistrationError(self, error_message):
         self.stopLoadingAnimation()
@@ -467,6 +463,7 @@ class MainApp(QMainWindow):
         print("Transformation matrix copied to clipboard.")
 
     def visualizeRegisteredPointCloud(self):
+        print("Visualizing registered point cloud. Current data:", self.registered_pcd)
         current_path = self.loadRefFileLineEdit.text()
         if current_path != self.cached_reference_path or self.reference_geometry is None:
             self.reference_geometry = None
@@ -532,7 +529,8 @@ class MainApp(QMainWindow):
         try:
             vis = o3d.visualization.Visualizer()
             vis.create_window()
-            vis.add_geometry(self.pcd_registered)  # Registered point cloud
+            print(self.registered_pcd)
+            vis.add_geometry(self.registered_pcd)  # Registered point cloud
             vis.add_geometry(reference_geom)       # Loaded reference geometry
             vis.run()
             vis.destroy_window()
@@ -543,6 +541,7 @@ class MainApp(QMainWindow):
         print(f"Visualization Error: {error_message}")
 
     def initiateSaveData(self):
+        print("Attempting to save data. Current registered pcd:", self.registered_pcd)
         file_path = self.loadFileLineEdit.text()
         print(self.registered_pcd)
         if not file_path:
@@ -646,6 +645,8 @@ class RegistrationWorker(QObject):
             if self.active:
                 # Emit the successful registration results
                 self.finished.emit(pcd_registered, str(transformation), log_text)
+                print("Emitting finished signal with:", pcd_registered, transformation, log_text)
+
         except Exception as e:
             if self.active:
                 self.error.emit(str(e))
@@ -720,19 +721,23 @@ class SaveWorker(QObject):
                 ]
 
                 if self.save_mesh:
-                    mesh = o3d.io.read_triangle_mesh(self.file_path)
-                    if mesh is not None:
-                        mesh.transform(self.transformation)
-                        mesh.scale(scale, center=(0, 0, 0))
-                        output_mesh_file = self.file_path.replace('.ply', '_registered_mesh_paraview.ply')
-                        o3d.io.write_triangle_mesh(output_mesh_file, mesh)
-                        saved_files.append("CFD-scaled registered mesh")
-                    else:
-                        QMessageBox.warning(self, "Warning", "No mesh data avilable for the current .ply file.")
+                    try:
+                        mesh = o3d.io.read_triangle_mesh(self.file_path)
+                        if len(mesh.triangles) > 0:
+                            mesh.transform(self.transformation)
+                            mesh.scale(scale, center=(0, 0, 0))
+                            output_mesh_file = self.file_path.replace('.ply', '_registered_mesh_paraview.ply')
+                            o3d.io.write_triangle_mesh(output_mesh_file, mesh)
+                            saved_files.append("CFD-scaled registered mesh")
+                        else:
+                            summary_message = "No mesh data available for the current .ply file\n"
+                    except Exception as e:
+                        print(f"Failed to process mesh data: {str(e)}")
+                        summary_message = "Failed to read mesh data\n"
                 
                 # Use the directory path
                 directory_path = os.path.dirname(self.file_path)
-                summary_message = f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
+                summary_message += f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
                 self.log_message.emit(summary_message)
             else:
                 self.log_message.emit("No registered point cloud available. Perform registration first.")
