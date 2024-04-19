@@ -398,6 +398,9 @@ class MainApp(QMainWindow):
             print("No file selected.")
 
     def executeRegistration(self):
+
+        # Clear the registration log text area
+        self.registrationLogLabel.clear()
         # Ensure previous worker and thread are properly cleaned up
         if self.registrationThread is not None:
             if self.registrationThread.isRunning():
@@ -432,17 +435,6 @@ class MainApp(QMainWindow):
         self.transformation = transformation
         print("Data stored in MainApp immediately after registration:", self.registered_pcd)
 
-
-    def handleRegistrationError(self, error_message):
-        self.stopLoadingAnimation()
-        self.registrationLogLabel.setText(f"Registration failed: {error_message}")
-        # Additional error handling
-
-    # def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
-    #     self.stopLoadingAnimation()
-    #     self.transformationMatrixText = transformation
-    #     self.pcd_registered = pcd_registered  # Store the registered point cloud
-    #     self.registrationLogLabel.setText(f"{log_text}")
 
     def handleRegistrationError(self, error_message):
         self.stopLoadingAnimation()
@@ -541,6 +533,8 @@ class MainApp(QMainWindow):
         print(f"Visualization Error: {error_message}")
 
     def initiateSaveData(self):
+        # Clear the save log text area
+        self.saveLogLabel.clear()
         print("Attempting to save data. Current registered pcd:", self.registered_pcd)
         file_path = self.loadFileLineEdit.text()
         print(self.registered_pcd)
