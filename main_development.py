@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox, QScrollArea
 from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication, QMovie
-from PySide6.QtCore import Qt, QTimer, QObject, Signal, Slot, QThread
+from PySide6.QtCore import Qt, QTimer, QObject, Signal, Slot, QThread, QSize
 from IPython.display import clear_output
 from components.point_cloud_utils import load_pcd
 from components.point_cloud_registration import PointCloudRegistration
@@ -9,57 +9,103 @@ import os
 
 print('Yah mon, starting up...')  # Should print immediately
 
-
 class CollapsibleSection(QWidget):
-    def __init__(self, title, parent=None):
+    def __init__(self, title, parent=None, height_threshold=350):
         super().__init__(parent)
+        self.height_threshold = height_threshold
         self.layout = QVBoxLayout(self)
+        
+        # Setting main background to black
+        self.setStyleSheet("background-color: black;")
 
-        # The header contains the title and the toggle button
+        # Header setup
         self.header = QHBoxLayout()
-
-        # The title label
         self.titleLabel = QLabel(title)
-        self.titleLabel.setStyleSheet("font-weight: bold;")  # Bold font for the title
+        self.titleLabel.setStyleSheet("font-weight: bold; color: white;")
         self.header.addWidget(self.titleLabel)
 
-        # The toggle button
         self.toggleButton = QPushButton("+")
-        self.toggleButton.setFixedSize(30, 30)  # Slightly larger button size
-        self.toggleButton.setStyleSheet("font-size: 18px; font-weight: bold;")  # Larger text and bold
+        self.toggleButton.setFixedSize(30, 30)
+        self.toggleButton.setStyleSheet("font-size: 18px; font-weight: bold; color: white; background-color: black;")
         self.toggleButton.setCheckable(True)
         self.toggleButton.setChecked(False)
         self.toggleButton.clicked.connect(self.onToggle)
         self.header.addWidget(self.toggleButton)
 
-        # Ensure that the title and button are aligned to the left, with no expanding space in between
         self.header.addStretch(1)
-
         self.layout.addLayout(self.header)
 
-        # The content widget is hidden initially and shown when the toggle button is clicked
+        # Content setup with scroll area
+        self.scrollArea = QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setVisible(False)
+        self.scrollArea.setLayoutDirection(Qt.RightToLeft)  # Set the layout direction to RightToLeft
+        self.scrollArea.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: black;
+            }
+            QScrollArea QScrollBar:vertical {
+                border: none;
+                background: black;
+                width: 10px;
+                margin: 0px 0 0px 0;
+                border-radius: 0px;
+            }
+            QScrollArea QScrollBar::handle:vertical {
+                background-color: #5b5b5b;
+                min-height: 30px;
+                border-radius: 5px;
+            }
+            QScrollArea QScrollBar::handle:vertical:hover {
+                background-color: #5b5b5b;
+            }
+            QScrollArea QScrollBar::add-line:vertical, QScrollArea QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollArea QScrollBar::add-page:vertical, QScrollArea QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollArea QWidget#viewport {
+                background: black;
+            }
+        """)  # Custom scroll bar style and ensuring viewport background is black
+
         self.contentWidget = QWidget()
+        self.contentWidget.setObjectName("viewport")  # This ensures the background style applies correctly
         self.contentWidget.setLayout(QVBoxLayout())
-        self.contentWidget.setVisible(False)
-        self.layout.addWidget(self.contentWidget)
+        self.scrollArea.setWidget(self.contentWidget)
+
+        self.layout.addWidget(self.scrollArea)
 
     def onToggle(self):
-        # Toggle the content visibility
         isVisible = self.toggleButton.isChecked()
-        self.contentWidget.setVisible(isVisible)
+        self.scrollArea.setVisible(isVisible)
         self.toggleButton.setText("-" if isVisible else "+")
 
-        # Directly request an update and re-layout
-        self.updateGeometry()  # Suggest to Qt that it should recalculate geometries
-        self.parentWidget().layout().activate()  # Force the parent layout to reevaluate its size constraints
+        if isVisible:
+            self.adjustScrollArea()
+        self.updateGeometry()
+        if self.parentWidget():
+            self.parentWidget().layout().activate()
 
-        # Optionally, force the top-level window to adjust to the new layout
         topLevelWindow = self.window()
         if topLevelWindow:
-            topLevelWindow.adjustSize()  # Adjust the size of the top-level window to fit its contents
+            topLevelWindow.adjustSize()
+
+    def adjustScrollArea(self):
+        # Adjusts the presence of scrollbars depending on content height
+        contentHeight = self.contentWidget.sizeHint().height()
+        if contentHeight > self.height_threshold:
+            self.scrollArea.setFixedSize(QSize(self.width(), self.height_threshold))
+            self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        else:
+            self.scrollArea.setFixedSize(QSize(self.width(), contentHeight))
+            self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     def contentLayout(self):
-        # Provides access to the content area's layout
         return self.contentWidget.layout()
     
 def applyButtonStyle(button):
@@ -163,7 +209,7 @@ class MainApp(QMainWindow):
         # Load and display the logo at the top
         self.logoLabel = QLabel()
         # self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(580, 580, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.logoPixmap = QPixmap("./ui/FlowVis3D_logo_v2.jpg").scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.logoLabel.setPixmap(self.logoPixmap)
         self.logoLabel.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logoLabel)
@@ -243,6 +289,7 @@ class MainApp(QMainWindow):
         self.registrationLogLabel.setReadOnly(True)
         self.registrationLogLabel.setWordWrapMode(QTextOption.WrapAnywhere)
         self.registrationLogLabel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show vertical scrollbar only when needed
+        self.registrationLogLabel.setLayoutDirection(Qt.RightToLeft)  # Set the layout direction to RightToLeft
         self.registrationLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show horizontal scrollbar only when needed
         applyTextAndScrollBarStyle(self.registrationLogLabel)  # Apply combined styles
         self.registrationLogLabel.setFixedHeight(120)
@@ -290,6 +337,7 @@ class MainApp(QMainWindow):
         self.saveLogLabel.setReadOnly(True)
         self.saveLogLabel.setWordWrapMode(QTextOption.WrapAnywhere)
         self.saveLogLabel.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show vertical scrollbar only when needed
+        self.saveLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show horizontal scrollbar only when needed
         self.saveLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Show horizontal scrollbar only when needed
         applyTextAndScrollBarStyle(self.saveLogLabel)  # Apply combined styles
         self.saveLogLabel.setFixedHeight(75)
