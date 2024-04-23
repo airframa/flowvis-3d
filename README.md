@@ -37,7 +37,7 @@ To set up this project locally, follow these steps:
 
 3. **Select Python Interpreter**
 
-   After installing the dependencies, set the Python interpreter to the one recommended by the virtual environment:
+   After installing the dependencies, set the Python interpreter to the one recommended by the virtual environment. On VS code:
 
    - Press `Ctrl+Shift+P` to open the command palette.
    - Type `Python: Select Interpreter` and press Enter.
