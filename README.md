@@ -14,31 +14,53 @@ To set up this project locally, follow these steps:
 
 1. **Clone the repository**
 
-`git clone https://github.com/airframa/flowvis-3d.git`
-`cd flowvis-3d`
-
+   ```sh
+   git clone https://github.com/airframa/flowvis-3d.git
+   cd flowvis-3d
+   ```
 
 2. **Install dependencies**
 
-- Configure Poetry to create the virtual environment within the project directory:
+   - Configure Poetry to create the virtual environment within the project directory:
 
-    `poetry config virtualenvs.in-project true`
+     ```sh
+     poetry config virtualenvs.in-project true
+     ```
 
-- Then, install dependencies with Poetry:
+   - Then, install dependencies with Poetry:
 
-    `poetry install`
+     ```sh
+     poetry install
+     ```
 
-This creates a `.venv` directory inside your project and installs all dependencies.
+   This creates a `.venv` directory inside your project and installs all dependencies.
+
+3. **Select Python Interpreter**
+
+   After installing the dependencies, set the Python interpreter to the one recommended by the virtual environment:
+
+   - Press `Ctrl+Shift+P` to open the command palette.
+   - Type `Python: Select Interpreter` and press Enter.
+   - Choose the recommended interpreter which should correspond to the virtual environment you've created, typically `.venv: poetry`.
+
 
 ### Running the Application
 
-Activate the virtual environment:
+- **Activate the virtual environment:**
 
-- Windows: `.venv\Scripts\activate`
-- Unix/MacOS: `source .venv/bin/activate`
+  - **Windows:**
+    ```
+    .venv\Scripts\activate
+    ```
+  - **Unix/MacOS:**
+    ```
+    source .venv/bin/activate
+    ```
+
+- **Start the application by running on the terminal:** `python app_launch.py`
 
 
-🚧 **Work in Progress**: Further instructions on running the application will be added soon.
+🚧 **Work in Progress**: Application currently under development. Further functionalities will be added soon. 
 
 
 
