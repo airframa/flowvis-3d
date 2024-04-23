@@ -43,11 +43,6 @@ To set up this project locally, follow these steps:
    - Type `Python: Select Interpreter` and press Enter.
    - Choose the recommended interpreter which should correspond to the virtual environment you've created, typically `.venv: poetry`.
 
-   ```plaintext
-   Ctrl+Shift+P
-   Python: Select Interpreter
-   Select '.venv: poetry'
-   ```
 
 ### Running the Application
 
