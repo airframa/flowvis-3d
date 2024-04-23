@@ -32,11 +32,18 @@ This creates a `.venv` directory inside your project and installs all dependenci
 
 ### Running the Application
 
-Activate the virtual environment:
+- **Activate the virtual environment:**
 
-- Windows: `.venv\Scripts\activate`
-- Unix/MacOS: `source .venv/bin/activate`
-- Start the application by running: `python app_launch.py`
+  - **Windows:**
+    ```
+    .venv\Scripts\activate
+    ```
+  - **Unix/MacOS:**
+    ```
+    source .venv/bin/activate
+    ```
+
+- **Start the application by running:** `python app_launch.py`
 
 
 🚧 **Work in Progress**: Application currently under development. Further functionalities will be added soon. 
