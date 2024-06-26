@@ -151,7 +151,7 @@ class SaveWorker(QObject):
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
 
-    def __init__(self, main_app, file_path, registered_pcd, transformation, save_mesh=False):
+    def __init__(self, main_app, file_path, registered_pcd, transformation, composed_filename, save_mesh=False):
         """
         Initializes the worker with the application context and saving parameters.
         """
@@ -160,6 +160,7 @@ class SaveWorker(QObject):
         self.file_path_pcd = file_path
         self.registered_pcd = registered_pcd
         self.transformation = transformation
+        self.composed_filename = composed_filename
         self.save_mesh = save_mesh
         self.active = True
 
@@ -183,8 +184,9 @@ class SaveWorker(QObject):
         try:
             if self.registered_pcd is not None:
                 pcd_copy = copy.deepcopy(self.registered_pcd)
-                output_file_raw = self.file_path_pcd.replace('.ply', '_registered.ply')
-                output_file_scaled = self.file_path_pcd.replace('.ply', '_registered_paraview.ply')
+                directory_path = os.path.dirname(self.file_path_pcd)
+                output_file_raw = os.path.join(directory_path, f"{self.composed_filename}_registered.ply")
+                output_file_scaled = os.path.join(directory_path, f"{self.composed_filename}_registered_paraview.ply")
                 o3d.io.write_point_cloud(output_file_raw, pcd_copy)
                 scale = 1 / 600
                 registered_pcd_scaled = pcd_copy.scale(scale, center=(0, 0, 0))
@@ -197,13 +199,13 @@ class SaveWorker(QObject):
                         mesh = o3d.io.read_triangle_mesh(self.file_path_pcd)
                         if len(mesh.triangles) > 0:
                             # define output file paths
-                            output_mesh_file_raw = self.file_path_pcd.replace('.ply', '_registered_mesh.ply')
-                            output_mesh_file = self.file_path_pcd.replace('.ply', '_registered_mesh_paraview.ply')
+                            output_mesh_file_raw = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh.ply")
+                            output_mesh_file = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh_paraview.ply")
                             # transform mesh
                             mesh_registered = mesh.transform(self.transformation)
                             # save unscaled mesh
                             o3d.io.write_triangle_mesh(output_mesh_file_raw, mesh_registered)
-                            saved_files.append("registered mesh")
+                            saved_files.append("original registered mesh")
                             # save scaled mesh
                             mesh_registered.scale(scale, center=(0, 0, 0))
                             o3d.io.write_triangle_mesh(output_mesh_file, mesh_registered)
@@ -216,7 +218,6 @@ class SaveWorker(QObject):
                         summary_message = "Failed to read mesh data\n"
 
                 # Compile summary of saved files and their location.
-                directory_path = os.path.dirname(self.file_path_pcd)
                 summary_message += f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
                 self.log_message.emit(summary_message)
             else:
@@ -233,7 +234,7 @@ class SaveWorker(QObject):
         """
         self.stop()
         super(SaveWorker, self).deleteLater()
-        
+
 
 
 

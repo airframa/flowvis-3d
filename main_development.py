@@ -923,8 +923,11 @@ class MainApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "A save operation is already in progress. Please wait for it to complete.")
             return
 
+        # Get the composed filename from the QLineEdit
+        composed_filename = self.fileNameLineEdit.text()
+
         # Instantiate the SaveWorker with the necessary data for saving.
-        self.saveWorker = SaveWorker(self, self.file_path_pcd, self.registered_pcd, self.transformation, save_mesh=True)
+        self.saveWorker = SaveWorker(self, self.file_path_pcd, self.registered_pcd, self.transformation, composed_filename, save_mesh=True)
         # Connect the worker's signals to appropriate slots for handling completion, errors, and log messages.
         self.saveWorker.finished.connect(self.cleanupSaveProcess)
         self.saveWorker.error.connect(self.handleSaveError)
