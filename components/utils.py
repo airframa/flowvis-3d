@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QScrollArea, QToolButton
+from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QScrollArea, QToolButton, QStyledItemDelegate
 from PySide6.QtGui import  QMovie, QIcon
 from PySide6.QtCore import Qt, QSize
 
@@ -347,6 +347,95 @@ def applyLineEditStyle(lineEdit):
         }
     """)
 
+class LeftAlignDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        option.displayAlignment = Qt.AlignRight | Qt.AlignVCenter
+        super(LeftAlignDelegate, self).paint(painter, option, index)
+
+def applyComboBoxStyle(comboBox):
+    """
+    Sets a custom style for QComboBox widgets to ensure visual consistency and readability.
+
+    Args:
+        comboBox (QComboBox): The combo box widget to which the style is applied.
+    """
+    comboBox.setStyleSheet("""
+        QComboBox {
+            background-color: #000000;  /* Black background */
+            color: #333;  /* Dark text color */
+            border-radius: 12px;  /* Rounded corners */
+            padding: 5px 30px 5px 15px;  /* Padding */
+            font-size: 14px;  /* Font size */
+            margin: 5px;  /* Margin */
+        }
+        QComboBox QAbstractItemView {
+            background-color: #000000;  /* Black background for drop-down list */
+            color: #ffffff;  /* White text color */
+            border-radius: 6px;  /* Rounded corners for drop-down list */
+            selection-background-color: #555555;  /* Background color for selected item */
+            selection-color: #ffffff;  /* Text color for selected item */
+            margin: 0px;
+            padding: 0px;
+        }
+        QComboBox QAbstractItemView::item {
+            background-color: #000000;  /* Black background for each item */
+            color: #ffffff;  /* White text color */
+        }
+        QComboBox::drop-down {
+            border: none;  /* No border for the drop-down button */
+        }
+        QComboBox::down-arrow {
+            image: url("./ui/down_arrow.png");  /* Custom arrow icon */
+            width: 14px;  /* Width of the arrow */
+            height: 14px;  /* Height of the arrow */
+            subcontrol-origin: padding;
+            subcontrol-position: right center;
+            right: 10px;  /* Move the arrow to the right */
+        }
+        QComboBox QAbstractItemView QScrollBar:vertical {
+            border: none;
+            background: #000000;  /* Black background for the scroll bar */
+            width: 10px;
+            margin: 0px 0 0px 0;
+            border-radius: 0px;
+        }
+        QComboBox QAbstractItemView QScrollBar::handle:vertical {
+            background-color: #5b5b5b;
+            min-height: 30px;
+            border-radius: 5px;
+        }
+        QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {
+            background-color: #5b5b5b;
+        }
+        QComboBox QAbstractItemView QScrollBar::add-line:vertical, QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
+            border: none;
+            background: none;
+            height: 0px;
+        }
+        QComboBox QAbstractItemView QScrollBar::add-page:vertical, QComboBox QAbstractItemView QScrollBar::sub-page:vertical {
+            background: none;
+        }
+        QComboBox::item:selected {
+            background-color: #555555;  /* Selected item background color */
+            color: #ffffff;  /* Selected item text color */
+        }
+        QComboBox QAbstractItemView::item:selected {
+            background-color: #555555;  /* Selected item background color */
+            color: #ffffff;  /* Selected item text color */
+        }
+        QComboBox:editable {
+            background-color: #ffffff;  /* White background for the line edit part */
+            color: #000000;  /* Black text color */
+        }
+        QComboBox QLineEdit {
+            background-color: #ffffff;  /* White background for the line edit part */
+            color: #000000;  /* Black text color */
+        }
+    """)
+    comboBox.setItemDelegate(LeftAlignDelegate(comboBox))  # Set item delegate for alignment
+    comboBox.setEditable(True)  # Make the combo box editable to style the line edit part
+    comboBox.lineEdit().setReadOnly(True)  # Make the line edit read-only to prevent user editing
+
 def applyTextAndScrollBarStyle(widget):
     """
     Configures custom styles for QTextEdit widgets including the main text area and its scrollbars. The style 
@@ -406,6 +495,28 @@ def applyTextAndScrollBarStyle(widget):
     
     # Combine both styles and apply to the widget
     widget.setStyleSheet(baseStyle + scrollbarStyle)
+
+def setupInputField(layout, label_text, placeholder_text):
+    """
+    Helper method to set up a label and QLineEdit for user input.
+
+    Args:
+        layout (QVBoxLayout): The layout into which the elements are to be integrated.
+        label_text (str): The text to display on the label.
+        placeholder_text (str): The placeholder text for the QLineEdit.
+    """
+    # Create a label with the provided text and add it to the layout
+    label = QLabel(label_text)
+    label.setAlignment(Qt.AlignLeft)
+    layout.addWidget(label)
+
+    # Create a QLineEdit with the provided placeholder text and add it to the layout
+    line_edit = QLineEdit()
+    line_edit.setPlaceholderText(placeholder_text)
+    applyLineEditStyle(line_edit)
+    layout.addWidget(line_edit)
+
+    return line_edit  # Return the QLineEdit for further use
 
 def createLoadingWheel(parent_section):
     """
@@ -476,6 +587,8 @@ def stopLoadingAnimation(label, movie, scrollArea):
     current_size = scrollArea.size()  # Get the current size of the scroll area.
     updated_height = current_size.height() - 20  # Decrease the height to remove the space for the animation.
     scrollArea.setFixedSize(current_size.width(), updated_height)  # Apply the new size to the scroll area.
+
+
 
 
 

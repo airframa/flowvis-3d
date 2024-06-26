@@ -1,7 +1,7 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox, QComboBox
 from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication
 from PySide6.QtCore import Qt, QThread
-from components.utils import CollapsibleSection, SettingsSection, applyButtonStyle, applyLineEditStyle, applyTextAndScrollBarStyle, createLoadingWheel, startLoadingAnimation, stopLoadingAnimation
+from components.utils import CollapsibleSection, SettingsSection, applyButtonStyle, applyLineEditStyle, applyTextAndScrollBarStyle, applyComboBoxStyle, setupInputField, createLoadingWheel, startLoadingAnimation, stopLoadingAnimation
 from components.workers import LoadPointCloudWorker, LoadReferenceWorker, RegistrationWorker, SaveWorker
 import open3d as o3d
 import os
@@ -23,7 +23,6 @@ class MainApp(QMainWindow):
         self.setAcceptDrops(True)  # Enable the main window to accept drag-and-drop events.
         self.initVariables()  # Initialize application-specific variables and state.
         self.setupUI()  # Set up the graphical user interface elements of the application.
-
 
     def initVariables(self):
         """
@@ -90,6 +89,7 @@ class MainApp(QMainWindow):
         """
         self.setupVisualizationSection(layout)
         self.setupRegistrationSection(layout)
+        self.setupSaveSection(layout)
         self.setupAdditionalRegistrationComponents()
         self.setupAdditionalSections(layout)
 
@@ -113,7 +113,7 @@ class MainApp(QMainWindow):
         layout.addWidget(self.visualizationSection)
 
         # Create a button that allows users to select a point cloud file for loading.
-        self.loadFileButton = QPushButton("Select Point Cloud")
+        self.loadFileButton = QPushButton("Select Scanned Point Cloud")
         applyButtonStyle(self.loadFileButton)  # Apply predefined styling to the button.
         # Connect the button's click event to open a file dialog, specifying the directory to start in.
         self.loadFileButton.clicked.connect(lambda: self.openFileDialog(self.loadFileLineEdit, "\\\\srvnetapp00\\Technical\\Aerodynamics\\Development\\FlowViz"))
@@ -156,10 +156,6 @@ class MainApp(QMainWindow):
             "\u2022 Adjust registration settings such as voxel size and desired accuracy (optional).\n"
             "\u2022 Copy transformation matrix.\n"
             "\u2022 Display registered point cloud for inspection.\n"
-            "\u2022 Save the registered data: save the registered point cloud ('_registered.ply'), the scaled registered point cloud ('_registered_paraview.ply') "
-            "and, if available, the scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. "
-            "The scaled data is intended for paraview/sandbox, where one can compare FlowVis with CFD data.\n"
-            "\u2022 Upload to sandbox (work in progress)."
         )
 
         # Create a collapsible section titled "Register" with the descriptive text and add it to the provided layout.
@@ -230,14 +226,104 @@ class MainApp(QMainWindow):
         self.visualizeRegisteredButton.clicked.connect(self.visualizeRegisteredPointCloud)  # Connect the click event to the visualization function.
         self.registrationSection.contentLayout().addWidget(self.visualizeRegisteredButton)  # Add the button to the layout.
 
+    def setupSaveSection(self, layout):
+        """
+        Sets up the save section in the application's user interface.
+        This section is intended to store registered point cloud data and upload it to sandbox. It includes functionality for setting the registered file name correctly,
+        according to the current data nomenclature, saving it in the network drive and handling automatically the upload to sandbox.
+
+        Args:
+            layout (QVBoxLayout): The layout into which this section is to be integrated.
+        """
+        # Descriptive text that provides information on what the user can do in the "Registration" section of the interface.
+        info_text_save = (
+            "Save Section:\n"
+            "\u2022 Provide input parameters for correct file naming, according to the current nomenclature.\n"
+            "\u2022 Save the registered data: save the registered wind tunnel model 60\u0025 scale point cloud ('_registered.ply'), the up-scaled registered point cloud ('_registered_paraview.ply') "
+            "and, if available, the up-scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. The files are named according to the sandbox nomenclature"
+            "The up-scaled data is intended for paraview/sandbox, where one can compare FlowVis with CFD data (100\u0025 scale).\n"
+            "\u2022 Upload to sandbox (work in progress)."
+        )
+
+        # Create a collapsible section titled "Save" with the descriptive text and add it to the provided layout.
+        self.saveSection = CollapsibleSection("Save", self, info_text=info_text_save)
+        layout.addWidget(self.saveSection)
+
+        # Create a label with the text "Enter WT Run Data" and add it to the provided layout.
+        headerLabel = QLabel("Enter WT Run Data")
+        headerLabel.setAlignment(Qt.AlignLeft)  # Center-align the text
+        font = QFont()
+        font.setBold(True)
+        headerLabel.setFont(font)
+        self.saveSection.contentLayout().addWidget(headerLabel)  # Add the button to the layout.
+
+        # Fetch WT Run data
+        self.modelLineEdit = setupInputField(self.saveSection.contentLayout(), "Model", "M44")
+        self.WTRunLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Run", "4748")
+        self.WTMapLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Map", "056d_v258_LS_03")
+
+        # Add "Car Part" label
+        carPartLabel = QLabel("Car Part")
+        carPartLabel.setAlignment(Qt.AlignLeft) 
+        self.saveSection.contentLayout().addWidget(carPartLabel)
+
+        # Add dropdown menu for car parts
+        self.carPartComboBox = QComboBox()
+        self.carPartComboBox.addItems(["body", "front brake", "rear brake", "floor", "front wheel", "rear wheel", "front wing", "rear wing", "internal", "front suspension", "rear suspension"])
+        applyComboBoxStyle(self.carPartComboBox)
+        self.saveSection.contentLayout().addWidget(self.carPartComboBox)
+
+        # Dictionary for correspondences
+        self.car_part_correspondences = {
+            "body": "bdy",
+            "front brake": "brk-frt",
+            "rear brake": "brk-rr",
+            "floor": "floor",
+            "front wheel": "frt-whl",
+            "rear wheel": "rr-whl",
+            "front wing": "fw",
+            "rear wing": "rw",
+            "internal": "intnl",
+            "front suspension": "susp-frt",
+            "rear suspension": "susp-rr"
+        }
+
+        # Add "Load Condition" label
+        loadConditionLabel = QLabel("Load Condition")
+        loadConditionLabel.setAlignment(Qt.AlignLeft) 
+        self.saveSection.contentLayout().addWidget(loadConditionLabel)
+
+        # Add dropdown menu for car parts
+        self.loadConditionComboBox = QComboBox()
+        self.loadConditionComboBox.addItems(["loaded", "unloaded", "straightline"])
+        applyComboBoxStyle(self.loadConditionComboBox)
+        self.saveSection.contentLayout().addWidget(self.loadConditionComboBox)
+
+        # Add "Car Part" label
+        filenameLabel = QLabel("File Name")
+        filenameLabel.setAlignment(Qt.AlignLeft) 
+        self.saveSection.contentLayout().addWidget(filenameLabel)
+        # Add QLineEdit for displaying the file name
+        self.fileNameLineEdit = QLineEdit()
+        self.fileNameLineEdit.setReadOnly(True)
+        applyLineEditStyle(self.fileNameLineEdit)
+        self.saveSection.contentLayout().addWidget(self.fileNameLineEdit)
+
+        # Connect signals to update the file name when any input changes
+        self.modelLineEdit.textChanged.connect(self.updateFileName)
+        self.WTRunLineEdit.textChanged.connect(self.updateFileName)
+        self.WTMapLineEdit.textChanged.connect(self.updateFileName)
+        self.carPartComboBox.currentIndexChanged.connect(self.updateFileName)
+        self.loadConditionComboBox.currentIndexChanged.connect(self.updateFileName)
+
         # Create a button to initiate the saving of the registered point cloud data.
         self.saveDataButton = QPushButton("Save Data")
         applyButtonStyle(self.saveDataButton)  # Apply styling.
         self.saveDataButton.clicked.connect(self.initiateSaveData)  # Connect the click event to the save data function.
-        self.registrationSection.contentLayout().addWidget(self.saveDataButton)  # Add the button to the layout.
+        self.saveSection.contentLayout().addWidget(self.saveDataButton)  # Add the button to the layout.
 
         # Create and setup a loading animation indicator for the saving operation, which will be shown while data is being saved.
-        self.loadingLabel_savedata, self.loadingMovie_savedata = createLoadingWheel(self.registrationSection)  # This function returns a label and an animation object.
+        self.loadingLabel_savedata, self.loadingMovie_savedata = createLoadingWheel(self.saveSection)  # This function returns a label and an animation object.
 
         # Setup a text edit widget for logging save operation messages.
         self.saveLogLabel = QTextEdit()
@@ -247,13 +333,13 @@ class MainApp(QMainWindow):
         self.saveLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Add horizontal scroll bar if needed.
         applyTextAndScrollBarStyle(self.saveLogLabel)  # Apply predefined styling.
         self.saveLogLabel.setFixedHeight(75)  # Set a fixed height for the log display.
-        self.registrationSection.contentLayout().addWidget(self.saveLogLabel)  # Add the log display to the layout.
+        self.saveSection.contentLayout().addWidget(self.saveLogLabel)  # Add the log display to the layout.
 
         # Create a button for uploading registered data to a sandbox environment.
         self.uploadSandboxButton = QPushButton("Upload to Sandbox")
         applyButtonStyle(self.uploadSandboxButton)  # Apply styling.
         self.uploadSandboxButton.clicked.connect(self.uploadtoSandbox)  # Connect the click event to the upload function.
-        self.registrationSection.contentLayout().addWidget(self.uploadSandboxButton)  # Add the button to the layout.
+        self.saveSection.contentLayout().addWidget(self.uploadSandboxButton)  # Add the button to the layout.
 
         # Setup a text edit widget for logging upload operation messages.
         self.sandboxLogLabel = QTextEdit()
@@ -263,7 +349,21 @@ class MainApp(QMainWindow):
         self.sandboxLogLabel.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Add horizontal scroll bar if needed.
         applyTextAndScrollBarStyle(self.sandboxLogLabel)  # Apply predefined styling.
         self.sandboxLogLabel.setFixedHeight(75)  # Set a fixed height for the log display.
-        self.registrationSection.contentLayout().addWidget(self.sandboxLogLabel)  # Add the log display to the layout.
+        self.saveSection.contentLayout().addWidget(self.sandboxLogLabel)  # Add the log display to the layout.
+
+    def updateFileName(self):
+        """
+        Updates the file name based on user inputs and displays it in the QLineEdit.
+        """
+        model = self.modelLineEdit.text()
+        wt_run = self.WTRunLineEdit.text()
+        wt_map = self.WTMapLineEdit.text()
+        car_part = self.car_part_correspondences[self.carPartComboBox.currentText()]
+        load_condition = self.loadConditionComboBox.currentText()
+
+        file_name = f"{model}_{wt_run}_FV_Sauber_STD_MAP_{wt_map}_{car_part}_{load_condition}"
+        self.fileNameLineEdit.setText(file_name)
+
 
     def setupAdditionalSections(self, layout):
         """
@@ -755,9 +855,15 @@ class MainApp(QMainWindow):
 
     def initiateSaveData(self):
         """
-        Initiates the save data process by first verifying that a file has been selected and checking for existing files.
+        Initiates the save data process by first verifying that all required fields are filled and checking for existing files.
         This method ensures that any previous saved data isn't unintentionally overwritten without user consent.
         """
+        # Validate required fields
+        missing_fields = self.validateRequiredFields()
+        if missing_fields:
+            QMessageBox.warning(self, "Warning", f"Please enter {', '.join(missing_fields)}.")
+            return
+
         # Clear any previous messages in the save log.
         self.saveLogLabel.clear()
 
@@ -774,8 +880,8 @@ class MainApp(QMainWindow):
         if os.path.exists(output_file_raw) or os.path.exists(output_file_scaled):
             # Prompt the user to confirm overwriting existing files.
             reply = QMessageBox.question(self, 'Confirm Overwrite',
-                                        "Files already exist. Do you want to overwrite them?",
-                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                         "Files already exist. Do you want to overwrite them?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
             # If the user chooses not to overwrite, cancel the save operation.
             if reply == QMessageBox.No:
@@ -784,6 +890,28 @@ class MainApp(QMainWindow):
 
         # Proceed with the save process if the files do not exist or if overwrite is confirmed.
         self.startSaveProcess()
+
+    def validateRequiredFields(self):
+        """
+        Validates that all required fields for the file name are filled.
+
+        Returns:
+            list: A list of missing field names, empty if all fields are filled.
+        """
+        missing_fields = []
+
+        if not self.modelLineEdit.text():
+            missing_fields.append("Model")
+        if not self.WTRunLineEdit.text():
+            missing_fields.append("WT Run")
+        if not self.WTMapLineEdit.text():
+            missing_fields.append("WT Map")
+        if self.carPartComboBox.currentText() not in self.car_part_correspondences:
+            missing_fields.append("Car Part")
+        if not self.loadConditionComboBox.currentText():
+            missing_fields.append("Load Condition")
+
+        return missing_fields
 
     def startSaveProcess(self):
         """
@@ -810,7 +938,7 @@ class MainApp(QMainWindow):
 
         # Start the save thread and initiate the loading animation to indicate saving is in progress.
         self.saveThread.start()
-        startLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.registrationSection.scrollArea)
+        startLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.saveSection.scrollArea)
 
     def handleSaveError(self, error):
         """
@@ -830,7 +958,7 @@ class MainApp(QMainWindow):
         completes, either successfully or due to an error, to ensure the application returns to a stable state.
         """
         # Stop any animations in the UI that indicate ongoing save operations, signaling completion to the user.
-        stopLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.registrationSection.scrollArea)
+        stopLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.saveSection.scrollArea)
 
         # Check if there is an active save worker and ensure it is properly deleted to free resources.
         if self.saveWorker:

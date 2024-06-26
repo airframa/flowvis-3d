@@ -196,9 +196,16 @@ class SaveWorker(QObject):
                     try:
                         mesh = o3d.io.read_triangle_mesh(self.file_path_pcd)
                         if len(mesh.triangles) > 0:
-                            mesh_registered = mesh.transform(self.transformation)
-                            mesh_registered.scale(scale, center=(0, 0, 0))
+                            # define output file paths
+                            output_mesh_file_raw = self.file_path_pcd.replace('.ply', '_registered_mesh.ply')
                             output_mesh_file = self.file_path_pcd.replace('.ply', '_registered_mesh_paraview.ply')
+                            # transform mesh
+                            mesh_registered = mesh.transform(self.transformation)
+                            # save unscaled mesh
+                            o3d.io.write_triangle_mesh(output_mesh_file_raw, mesh_registered)
+                            saved_files.append("registered mesh")
+                            # save scaled mesh
+                            mesh_registered.scale(scale, center=(0, 0, 0))
                             o3d.io.write_triangle_mesh(output_mesh_file, mesh_registered)
                             saved_files.append("CFD-scaled registered mesh")
                             summary_message = "Mesh data available for the current .ply file\n"
