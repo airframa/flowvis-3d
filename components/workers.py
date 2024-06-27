@@ -4,6 +4,10 @@ from components.point_cloud_utils import load_pcd
 import open3d as o3d
 import copy
 import os
+import tarfile
+import tempfile
+import shutil
+
 
 
 class LoadPointCloudWorker(QObject):
@@ -162,6 +166,7 @@ class SaveWorker(QObject):
         self.transformation = transformation
         self.composed_filename = composed_filename
         self.save_mesh = save_mesh
+        self.scaled_mesh = None  # Add an instance variable to store the scaled mesh
         self.active = True
 
     def stop(self):
@@ -211,6 +216,8 @@ class SaveWorker(QObject):
                             o3d.io.write_triangle_mesh(output_mesh_file, mesh_registered)
                             saved_files.append("CFD-scaled registered mesh")
                             summary_message = "Mesh data available for the current .ply file\n"
+                            # store scaled mesh for sandbox upload
+                            self.scaled_mesh = mesh_registered
                         else:
                             summary_message = "No mesh data available for the current .ply file\n"
                     except Exception as e:
@@ -234,6 +241,129 @@ class SaveWorker(QObject):
         """
         self.stop()
         super(SaveWorker, self).deleteLater()
+
+class UploadWorker(QObject):
+    """
+    Handles the upload of registered data to a sandbox environment.
+    """
+    finished = Signal()  # Emitted when the upload process completes.
+    error = Signal(str)  # Emitted on error during the upload process.
+    log_message = Signal(str)  # Emitted to send log messages regarding the upload status.
+    requestStop = Signal()  # Signal to request stopping the process.
+    active = False  # Indicates whether the worker is actively processing.
+
+    def __init__(self, main_app, scaled_mesh, car_part, target_directory):
+        """
+        Initializes the worker with the application context and upload parameters.
+
+        Args:
+            main_app: Reference to the main application instance.
+            scaled_mesh: The scaled mesh to be uploaded.
+            car_part: The car part name.
+            target_directory: The target directory for the upload.
+        """
+        super(UploadWorker, self).__init__()
+        self.main_app = main_app
+        self.scaled_mesh = scaled_mesh
+        self.car_part = car_part
+        self.target_directory = target_directory
+        self.active = True
+
+    def stop(self):
+        """
+        Safely stops the worker if it is active.
+        """
+        if self.active:
+            self.active = False
+            self.requestStop.emit()
+
+    @Slot()
+    def run(self):
+        """
+        Performs the upload of the scaled mesh. Emits signals on completion or error.
+        Only runs if the worker is active.
+        """
+        if not self.active:
+            return
+
+        try:
+            # Create temporary directory for storing the files before upload
+            temp_dir = tempfile.mkdtemp()
+            wt_run = self.main_app.WTRunLineEdit.text().strip()
+            wt_run_folder = os.path.join(temp_dir, wt_run)
+            os.makedirs(wt_run_folder)
+
+            # Create the "distiller2" folder inside the WT Run folder
+            distiller2_folder = os.path.join(wt_run_folder, "distiller2")
+            os.makedirs(distiller2_folder)
+
+            # Get the car part short name from the dictionary
+            car_part_short_name = self.main_app.car_part_correspondences[self.car_part]
+
+            # Save the registered mesh
+            mesh_file_path = os.path.join(distiller2_folder, f"{car_part_short_name}.ply")
+            o3d.io.write_triangle_mesh(mesh_file_path, self.scaled_mesh)
+
+            # Compress the folder
+            tar_file_path = self.compressFolder(wt_run_folder)
+
+            # Upload the .tar file to the target directory
+            self.uploadFile(tar_file_path, self.target_directory)
+
+            # Emit the finished signal to indicate the process is complete
+            self.finished.emit()
+
+        except Exception as e:
+            # Emit the error signal with the exception message if an error occurs
+            self.error.emit(str(e))
+        finally:
+            # Set the worker's active state to False, indicating the process is no longer running
+            self.active = False
+
+    def compressFolder(self, folder_path):
+        """
+        Compresses the specified folder into a .tar file.
+
+        Args:
+            folder_path: The path of the folder to compress.
+
+        Returns:
+            The path of the created .tar file.
+        """
+        tar_file_path = folder_path + ".tar"
+        with tarfile.open(tar_file_path, "w") as tar:
+            tar.add(folder_path, arcname=os.path.basename(folder_path))
+        return tar_file_path
+
+    def uploadFile(self, file_path, target_directory):
+        """
+        Uploads the specified file to the target directory.
+
+        Args:
+            file_path: The path of the file to upload.
+            target_directory: The directory where the file should be uploaded.
+        """
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory)
+        
+        target_path = os.path.join(target_directory, os.path.basename(file_path))
+        shutil.copy(file_path, target_path)
+        self.log_message.emit(f"Uploaded .tar file to: {target_path}")
+
+    def deleteLater(self):
+        """
+        Ensures the worker stops processing before deletion.
+        """
+        self.stop()
+        super(UploadWorker, self).deleteLater()
+
+
+
+
+
+
+
+
 
 
 

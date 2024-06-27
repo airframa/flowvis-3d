@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialo
 from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication
 from PySide6.QtCore import Qt, QThread
 from components.utils import CollapsibleSection, SettingsSection, applyButtonStyle, applyLineEditStyle, applyTextAndScrollBarStyle, applyComboBoxStyle, setupInputField, createLoadingWheel, startLoadingAnimation, stopLoadingAnimation
-from components.workers import LoadPointCloudWorker, LoadReferenceWorker, RegistrationWorker, SaveWorker
+from components.workers import LoadPointCloudWorker, LoadReferenceWorker, RegistrationWorker, SaveWorker, UploadWorker
 import open3d as o3d
 import os
 
@@ -34,6 +34,7 @@ class MainApp(QMainWindow):
         self.LoadReferenceWorker = None
         self.saveThread = None
         self.saveWorker = None
+        self.uploadThread = None  
         self.file_path_pcd = None  
         self.reference_geometry = None
         self.cached_reference_path = None
@@ -340,6 +341,9 @@ class MainApp(QMainWindow):
         applyButtonStyle(self.uploadSandboxButton)  # Apply styling.
         self.uploadSandboxButton.clicked.connect(self.uploadtoSandbox)  # Connect the click event to the upload function.
         self.saveSection.contentLayout().addWidget(self.uploadSandboxButton)  # Add the button to the layout.
+
+         # Create and setup a loading animation indicator for the upload operation, which will be shown while data is being uploaded.
+        self.loadingLabel_upload, self.loadingMovie_upload = createLoadingWheel(self.saveSection)  
 
         # Setup a text edit widget for logging upload operation messages.
         self.sandboxLogLabel = QTextEdit()
@@ -872,16 +876,24 @@ class MainApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "No file selected. Please select a file first.")
             return
 
-        # Construct file paths for both raw and scaled versions of the registered point cloud.
-        output_file_raw = self.file_path_pcd.replace('.ply', '_registered.ply')
-        output_file_scaled = self.file_path_pcd.replace('.ply', '_registered_paraview.ply')
+        # Generate the base file name string
+        model = self.modelLineEdit.text()
+        wt_run = self.WTRunLineEdit.text()
+        wt_map = self.WTMapLineEdit.text()
+        car_part = self.car_part_correspondences[self.carPartComboBox.currentText()]
+        load_condition = self.loadConditionComboBox.currentText()
+        base_file_name = f"{model}_{wt_run}_FV_Sauber_STD_MAP_{wt_map}_{car_part}_{load_condition}"
 
-        # Check if either of the constructed file paths already exists.
-        if os.path.exists(output_file_raw) or os.path.exists(output_file_scaled):
+        # Get the directory of the selected file
+        directory = os.path.dirname(self.file_path_pcd)
+
+        # Check for existing files that contain the base file name
+        existing_files = [f for f in os.listdir(directory) if base_file_name in f]
+        if existing_files:
             # Prompt the user to confirm overwriting existing files.
             reply = QMessageBox.question(self, 'Confirm Overwrite',
-                                         "Files already exist. Do you want to overwrite them?",
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                        f"Files already exist that match the name pattern '{base_file_name}'. Do you want to overwrite them?",
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
             # If the user chooses not to overwrite, cancel the save operation.
             if reply == QMessageBox.No:
@@ -965,6 +977,8 @@ class MainApp(QMainWindow):
 
         # Check if there is an active save worker and ensure it is properly deleted to free resources.
         if self.saveWorker:
+            # Store the scaled mesh in the main app for later use in upload
+            self.scaled_mesh = self.saveWorker.scaled_mesh
             self.saveWorker.deleteLater()  # Safely delete the worker object.
             self.saveWorker = None         # Remove the reference to the worker.
 
@@ -1004,15 +1018,89 @@ class MainApp(QMainWindow):
 
     def uploadtoSandbox(self):
         """
-        Initiates the upload of registered data to a sandbox environment. This function is
-        a placeholder and indicates that the functionality is currently under development.
-
+        Initiates the upload of registered data to a sandbox environment.
         """
-        # Clear any existing messages in the sandbox log label to prepare for new information.
         self.sandboxLogLabel.clear()
-        # Set the text of the sandbox log label to indicate that the upload functionality is still being developed.
-        log_text_sandbox = 'Upload to Sandbox currently under development'
-        self.sandboxLogLabel.setText(log_text_sandbox)
+        wt_run = self.WTRunLineEdit.text().strip()
+        car_part = self.carPartComboBox.currentText().strip()
+        if not wt_run:
+            QMessageBox.warning(self, "Warning", "Please enter WT Run.")
+            return
+
+        if self.uploadThread and self.uploadThread.isRunning():
+            QMessageBox.warning(self, "Warning", "An upload operation is already in progress. Please wait for it to complete.")
+            return
+
+        if not hasattr(self, 'scaled_mesh') or self.scaled_mesh is None:
+            QMessageBox.warning(self, "Warning", "No scaled mesh available.")
+            return
+
+        # Define the target upload directory
+        target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
+
+        # Instantiate the UploadWorker
+        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, target_directory)
+        self.uploadWorker.finished.connect(self.cleanupUploadProcess)
+        self.uploadWorker.error.connect(self.handleUploadError)
+        self.uploadWorker.log_message.connect(self.updateUploadLog)
+
+        # Create and start the thread
+        self.uploadThread = QThread()
+        self.uploadWorker.moveToThread(self.uploadThread)
+        self.uploadThread.started.connect(self.uploadWorker.run)
+        self.uploadThread.finished.connect(self.uploadThread.deleteLater)
+        self.uploadThread.start()
+        startLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
+
+
+    def cleanupUploadProcess(self):
+        """
+        Cleans up resources and UI components used during the upload process.
+        This method is called after an upload operation completes, either successfully or due to an error,
+        to ensure the application returns to a stable state.
+        """
+        # Stop the upload animation to indicate that the upload operation is complete.
+        stopLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
+
+        # Check if there is an active upload worker and ensure it is properly deleted to free resources.
+        if self.uploadWorker:
+            self.uploadWorker.deleteLater()  # Safely delete the worker object.
+            self.uploadWorker = None         # Remove the reference to the worker.
+
+        # Check if there is an active upload thread and ensure it is properly terminated.
+        if self.uploadThread:
+            self.uploadThread.quit()        # Request the thread to quit.
+            self.uploadThread.wait()        # Wait for the thread to finish.
+            self.uploadThread.deleteLater() # Safely delete the thread object.
+            self.uploadThread = None
+
+        # Uncomment below if you wish to provide user feedback when upload operations are definitively completed.
+        # QMessageBox.information(self, "Upload Complete", "Data has been successfully uploaded.")
+
+    def handleUploadError(self, error):
+        """
+        Handles any errors that occur during the upload process by displaying an error message to the user and initiating cleanup.
+
+        Args:
+            error (str): The error message describing what went wrong during the upload operation.
+        """
+        # Display a critical error message using a message box to alert the user that an error has occurred.
+        QMessageBox.critical(self, "Upload Error", f"An error occurred: {error}")
+        # After displaying the error message, call the cleanup process to properly shut down the worker and thread.
+        self.cleanupUploadProcess()  # Ensures that resources are freed and the application state is correctly reset.
+
+    def updateUploadLog(self, message):
+        """
+        Updates the upload log text edit widget with messages received from the UploadWorker.
+        This function is typically used to display status updates and results from the upload process.
+
+        Args:
+            message (str): The message to be added to the upload log.
+        """
+        # Append the provided message to the upload log QTextEdit widget.
+        # This allows users to see the progress and details of the upload operation in real-time.
+        self.sandboxLogLabel.append(message)
+
 
 # Run the script as the main program.
 if __name__ == "__main__":
