@@ -1,0 +1,54 @@
+<sandbox generator="FLOWVIZ">
+  <boundbox xmax="10000" xmin="-10000" ymax="10000" ymin="-10000" zmax="10000" zmin="-10000" />
+  <post-processing-info>
+    <post-details>
+      <exportToDistiller execution-time="00:00:00" generation-time="00:00:00" release="no">
+        <faceZoneFields execution-time="00:00:00" />
+        <sampleTriSurfaceFields execution-time="00:00:00" />
+        <additionalFields execution-time="00:00:00" />
+        <patchesToVTU execution-time="00:00:00" />
+        <faceZonesToVTU execution-time="00:00:00" />
+        <planeIntegrations execution-time="00:00:00" />
+        <fluidSplatter execution-time="00:00:00" />
+        <sampleTriSurfaceToVTU execution-time="00:00:00" />
+        <cuttingPlanesToVTU execution-time="00:00:00" />
+      </exportToDistiller>
+    </post-details>
+  </post-processing-info>
+  <dataXmlVersion value="2.3" />
+  <reference-data>
+  </reference-data>
+  <car-attitude>
+    <cornering-flow value="false" />
+  </car-attitude>
+  <solver-details build-time="unknown" name="FLOWVIZ" release="undefined" version="undefined">
+    <solver-read-time value="0" />
+    <solver-write-time value="0" />
+    <solver-elapsed-time value="0" />
+    <num-iters value="0" />
+    <num-procs value="0" />
+    <symmetry-mode value="symm" />
+    <compressible value="false" />
+    <convergence-criteria>
+      <satisfied value="true" />
+    </convergence-criteria>
+  </solver-details>
+  <mesh-details>
+    <num-cells value="0" />
+    <num-nodes value="0" />
+    <num-faces value="0" />
+    <tunnel-x-axis x="1" y="0" z="0" />
+    <tunnel-z-axis x="0" y="0" z="1" />
+    <moment-center x="0" y="0" z="0" />
+  </mesh-details>
+  <qm-id value="0" />
+  <surface-threads/>
+  <radiators-threads />
+  <porous-zones-threads />
+  <mass-flow-threads />
+  <volume-threads />
+  <vtu-threads>
+    <thread id="1" name="brk-frt" type="wall" regExp="brk-frt.vtu"/>
+  </vtu-threads>
+  <post />
+</sandbox>
