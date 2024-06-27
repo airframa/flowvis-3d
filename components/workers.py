@@ -7,8 +7,7 @@ import os
 import tarfile
 import tempfile
 import shutil
-
-
+import xml.etree.ElementTree as ET
 
 class LoadPointCloudWorker(QObject):
     """
@@ -242,6 +241,8 @@ class SaveWorker(QObject):
         self.stop()
         super(SaveWorker, self).deleteLater()
 
+import xml.etree.ElementTree as ET
+
 class UploadWorker(QObject):
     """
     Handles the upload of registered data to a sandbox environment.
@@ -300,9 +301,23 @@ class UploadWorker(QObject):
             # Get the car part short name from the dictionary
             car_part_short_name = self.main_app.car_part_correspondences[self.car_part]
 
-            # Save the registered mesh
-            mesh_file_path = os.path.join(distiller2_folder, f"{car_part_short_name}.ply")
+            # Save the registered mesh inside the "flowviz" folder in "distiller2"
+            flowviz_folder = os.path.join(distiller2_folder, "flowviz")
+            os.makedirs(flowviz_folder)
+            mesh_file_path = os.path.join(flowviz_folder, f"{car_part_short_name}.ply")
             o3d.io.write_triangle_mesh(mesh_file_path, self.scaled_mesh)
+
+            # Load and modify the XML template
+            template_path = os.path.join(os.path.dirname(__file__), '../templates/data.xml')
+            tree = ET.parse(template_path)
+            root = tree.getroot()
+            thread = root.find(".//vtu-threads/thread")
+            thread.set("name", car_part_short_name)
+            thread.set("regExp", f"{car_part_short_name}.vtu")
+
+            # Save the modified XML file in "distiller2"
+            xml_file_path = os.path.join(distiller2_folder, "data.xml")
+            tree.write(xml_file_path)
 
             # Compress the folder
             tar_file_path = self.compressFolder(wt_run_folder)
@@ -356,6 +371,8 @@ class UploadWorker(QObject):
         """
         self.stop()
         super(UploadWorker, self).deleteLater()
+
+
 
 
 
