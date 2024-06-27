@@ -1,0 +1,59 @@
+<root>
+  <client value="F1" />
+  <car model="M44" name="C44" />
+  <run-info>
+    <run-description value="Front susp flowviz test" />
+    <free-tags>
+      <tag name="FLOWVIZ" value="" />
+    </free-tags>
+    <parent-run>
+      <project-label value="C44-WT00" />
+      <run-label value="2755" />
+    </parent-run>
+    <is-a-wind-tunnel-run value="true" />
+  </run-info>
+  <case-info>
+    <labels>
+      <project value="C44-WT00" />
+      <run value="3345-FLOWVIZ" />
+      <case value="03" />
+    </labels>
+    <case-description value="LS_03" />
+    <project-type value="OTHERS" />
+    <qm-project value="OTHERS" />
+    <user email="Norman.DelPuppo@sauber-group.com" value="nde" />
+    <solution-type value="FLOWVIZ" />
+    <free-tags>
+      <tag name="FWF" value="k28" />
+      <tag name="FLOWVIZ" value="" />
+    </free-tags>
+  </case-info>
+  <reference-data>
+    <reference-velocity value="50" />
+    <reference-pressure value="0" />
+    <reference-area value="0.7349" />
+    <reference-density value="1.1629" />
+    <reference-temperature value="288.16" />
+    <reference-viscosity value="-1" />
+    <reference-length value="1" />
+    <reference-depth value="-1" />
+    <reference-enthalpy value="0" />
+    <reference-gamma value="-1" />
+    <reference-thread value="-1" />
+  </reference-data>
+  <car-attitude>
+    <model-scale value="0.6" />
+    <angle-convention value="WT" />
+    <frh value="23.7" />
+    <rrh value="56.8" />
+    <yaw-angle value="4.5" />
+    <baseline value="-1" />
+    <steer value="-3.0" />
+    <roll value="0.9" />
+    <wheel-base value="1" />
+    <tyres/>
+  </car-attitude>
+  <post-info>
+    <modified-prefixes value="not-set" />
+  </post-info>
+</root>
