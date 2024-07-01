@@ -261,7 +261,7 @@ class MainApp(QMainWindow):
         # Fetch WT Run data
         self.modelLineEdit = setupInputField(self.saveSection.contentLayout(), "Model", "M44")
         self.WTRunLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Run", "4748")
-        self.WTMapLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Map", "056d_v258_LS_03")
+        self.WTMapLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Map", "STD_MAP_056d_v258_LS_03")
 
         # Add "Car Part" label
         carPartLabel = QLabel("Car Part")
@@ -294,13 +294,23 @@ class MainApp(QMainWindow):
         loadConditionLabel.setAlignment(Qt.AlignLeft) 
         self.saveSection.contentLayout().addWidget(loadConditionLabel)
 
-        # Add dropdown menu for car parts
+        # Add dropdown menu for load conditions
         self.loadConditionComboBox = QComboBox()
         self.loadConditionComboBox.addItems(["loaded", "unloaded", "straightline"])
         applyComboBoxStyle(self.loadConditionComboBox)
         self.saveSection.contentLayout().addWidget(self.loadConditionComboBox)
 
-        # Add "Car Part" label
+        # Add "Notes" label
+        notesLabel = QLabel("Notes (Optional)")
+        notesLabel.setAlignment(Qt.AlignLeft)
+        self.saveSection.contentLayout().addWidget(notesLabel)
+
+        # Add QLineEdit for notes
+        self.notesLineEdit = QLineEdit()
+        applyLineEditStyle(self.notesLineEdit)
+        self.saveSection.contentLayout().addWidget(self.notesLineEdit)
+
+        # Add "File Name" label
         filenameLabel = QLabel("File Name")
         filenameLabel.setAlignment(Qt.AlignLeft) 
         self.saveSection.contentLayout().addWidget(filenameLabel)
@@ -316,6 +326,7 @@ class MainApp(QMainWindow):
         self.WTMapLineEdit.textChanged.connect(self.updateFileName)
         self.carPartComboBox.currentIndexChanged.connect(self.updateFileName)
         self.loadConditionComboBox.currentIndexChanged.connect(self.updateFileName)
+        self.notesLineEdit.textChanged.connect(self.updateFileName)
 
         # Create a button to initiate the saving of the registered point cloud data.
         self.saveDataButton = QPushButton("Save Data")
@@ -342,7 +353,7 @@ class MainApp(QMainWindow):
         self.uploadSandboxButton.clicked.connect(self.uploadtoSandbox)  # Connect the click event to the upload function.
         self.saveSection.contentLayout().addWidget(self.uploadSandboxButton)  # Add the button to the layout.
 
-         # Create and setup a loading animation indicator for the upload operation, which will be shown while data is being uploaded.
+        # Create and setup a loading animation indicator for the upload operation, which will be shown while data is being uploaded.
         self.loadingLabel_upload, self.loadingMovie_upload = createLoadingWheel(self.saveSection)  
 
         # Setup a text edit widget for logging upload operation messages.
@@ -355,6 +366,7 @@ class MainApp(QMainWindow):
         self.sandboxLogLabel.setFixedHeight(75)  # Set a fixed height for the log display.
         self.saveSection.contentLayout().addWidget(self.sandboxLogLabel)  # Add the log display to the layout.
 
+
     def updateFileName(self):
         """
         Updates the file name based on user inputs and displays it in the QLineEdit.
@@ -364,10 +376,14 @@ class MainApp(QMainWindow):
         wt_map = self.WTMapLineEdit.text()
         car_part = self.car_part_correspondences[self.carPartComboBox.currentText()]
         load_condition = self.loadConditionComboBox.currentText()
+        notes = self.notesLineEdit.text().strip()
 
-        file_name = f"{model}_{wt_run}_FV_Sauber_STD_MAP_{wt_map}_{car_part}_{load_condition}"
+        if notes:
+            file_name = f"{model}_{wt_run}_FV_Sauber_{wt_map}_{car_part}_{load_condition}_{notes}"
+        else:
+            file_name = f"{model}_{wt_run}_FV_Sauber_{wt_map}_{car_part}_{load_condition}"
+
         self.fileNameLineEdit.setText(file_name)
-
 
     def setupAdditionalSections(self, layout):
         """
@@ -1036,7 +1052,8 @@ class MainApp(QMainWindow):
             return
 
         # Define the target upload directory
-        target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
+        # target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
+        target_directory = r"D:/sandbox_test"
 
         # Instantiate the UploadWorker
         self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, target_directory)
