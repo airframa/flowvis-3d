@@ -43,6 +43,7 @@ class MainApp(QMainWindow):
         self.registered_pcd = None
         self.transformation = None
         self.workerIsActive = False
+        self.case_description = None  # Initialize case_description variable
 
     def setupUI(self):
         """
@@ -241,7 +242,7 @@ class MainApp(QMainWindow):
             "Save Section:\n"
             "\u2022 Provide input parameters for correct file naming, according to the current nomenclature.\n"
             "\u2022 Save the registered data: save the registered wind tunnel model 60\u0025 scale point cloud ('_registered.ply'), the up-scaled registered point cloud ('_registered_paraview.ply') "
-            "and, if available, the up-scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. The files are named according to the sandbox nomenclature"
+            "and, if available, wind tunnel model 60\u0025 scale mesh ('_registered_mesh.ply') and the up-scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. The files are named according to the sandbox nomenclature"
             "The up-scaled data is intended for paraview/sandbox, where one can compare FlowVis with CFD data (100\u0025 scale).\n"
             "\u2022 Upload to sandbox (work in progress)."
         )
@@ -377,6 +378,17 @@ class MainApp(QMainWindow):
         car_part = self.car_part_correspondences[self.carPartComboBox.currentText()]
         load_condition = self.loadConditionComboBox.currentText()
         notes = self.notesLineEdit.text().strip()
+
+        # Extract case description from wt_map
+        self.case_description = None
+        case_descriptions = ["SL_01", "LS_02", "LS_03", "VHS_04", "LS_05", "MS_06", "MS_07", "MS_09", "LS_09", "LS_10"]
+        for case in case_descriptions:
+            if case in wt_map:
+                self.case_description = case
+                break
+
+        # if self.case_description:
+        #     print(f"Case Description: {self.case_description}")
 
         if notes:
             file_name = f"{model}_{wt_run}_FV_Sauber_{wt_map}_{car_part}_{load_condition}_{notes}"
@@ -1037,10 +1049,20 @@ class MainApp(QMainWindow):
         Initiates the upload of registered data to a sandbox environment.
         """
         self.sandboxLogLabel.clear()
+        model = self.modelLineEdit.text()
         wt_run = self.WTRunLineEdit.text().strip()
         car_part = self.carPartComboBox.currentText().strip()
+
+        if not self.case_description:
+            QMessageBox.warning(self, "Warning", "Please enter the case description in the WT Map.")
+            return
+
         if not wt_run:
             QMessageBox.warning(self, "Warning", "Please enter WT Run.")
+            return
+        
+        if not model:
+            QMessageBox.warning(self, "Warning", "Please enter WT Model.")
             return
 
         if self.uploadThread and self.uploadThread.isRunning():

@@ -241,8 +241,6 @@ class SaveWorker(QObject):
         self.stop()
         super(SaveWorker, self).deleteLater()
 
-import xml.etree.ElementTree as ET
-
 class UploadWorker(QObject):
     """
     Handles the upload of registered data to a sandbox environment.
@@ -307,7 +305,7 @@ class UploadWorker(QObject):
             mesh_file_path = os.path.join(flowviz_folder, f"{car_part_short_name}.ply")
             o3d.io.write_triangle_mesh(mesh_file_path, self.scaled_mesh)
 
-            # Load and modify the XML template
+            # Load and modify the data.xml template
             template_path = os.path.join(os.path.dirname(__file__), '../templates/data.xml')
             tree = ET.parse(template_path)
             root = tree.getroot()
@@ -315,9 +313,15 @@ class UploadWorker(QObject):
             thread.set("name", car_part_short_name)
             thread.set("regExp", f"{car_part_short_name}.vtu")
 
-            # Save the modified XML file in "distiller2"
+            # Save the modified data.xml file in "distiller2"
             xml_file_path = os.path.join(distiller2_folder, "data.xml")
             tree.write(xml_file_path)
+
+            # Modify and save the iLaunchData.xml file
+            self.modify_and_save_ilauchdata(wt_run_folder)
+
+            # Copy the additional XML files to the WT Run folder
+            self.copyTemplateFiles(wt_run_folder)
 
             # Compress the folder
             tar_file_path = self.compressFolder(wt_run_folder)
@@ -335,15 +339,52 @@ class UploadWorker(QObject):
             # Set the worker's active state to False, indicating the process is no longer running
             self.active = False
 
+    def modify_and_save_ilauchdata(self, wt_run_folder):
+        """
+        Reads the iLaunchData.xml template, modifies the car model and name, and saves it to the WT run folder.
+
+        Args:
+            wt_run_folder (str): The path of the WT run folder where the modified XML file should be saved.
+        """
+        template_path = os.path.join(os.path.dirname(__file__), '../templates/iLaunchData.xml')
+        tree = ET.parse(template_path)
+        root = tree.getroot()
+
+        wt_model = self.main_app.modelLineEdit.text().strip()
+        wt_model_number = wt_model[1:]  # Extract the number part from the WT model string
+
+        car_element = root.find(".//car")
+        if car_element is not None:
+            car_element.set("model", wt_model)
+            car_element.set("name", f"C{wt_model_number}")
+
+        xml_file_path = os.path.join(wt_run_folder, "iLaunchData.xml")
+        tree.write(xml_file_path)
+
+    def copyTemplateFiles(self, wt_run_folder):
+        """
+        Copies the additional XML template files to the WT run folder.
+
+        Args:
+            wt_run_folder (str): The path of the WT run folder where the template files should be copied.
+        """
+        template_files = ["post-c44-v4.2.xml"]
+        template_folder = os.path.join(os.path.dirname(__file__), '../templates')
+
+        for file_name in template_files:
+            src_file = os.path.join(template_folder, file_name)
+            dest_file = os.path.join(wt_run_folder, file_name)
+            shutil.copy(src_file, dest_file)
+
     def compressFolder(self, folder_path):
         """
         Compresses the specified folder into a .tar file.
 
         Args:
-            folder_path: The path of the folder to compress.
+            folder_path (str): The path of the folder to compress.
 
         Returns:
-            The path of the created .tar file.
+            str: The path of the created .tar file.
         """
         tar_file_path = folder_path + ".tar"
         with tarfile.open(tar_file_path, "w") as tar:
@@ -355,8 +396,8 @@ class UploadWorker(QObject):
         Uploads the specified file to the target directory.
 
         Args:
-            file_path: The path of the file to upload.
-            target_directory: The directory where the file should be uploaded.
+            file_path (str): The path of the file to upload.
+            target_directory (str): The directory where the file should be uploaded.
         """
         if not os.path.exists(target_directory):
             os.makedirs(target_directory)
