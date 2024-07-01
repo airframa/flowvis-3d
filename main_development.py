@@ -908,7 +908,7 @@ class MainApp(QMainWindow):
         model = self.modelLineEdit.text()
         wt_run = self.WTRunLineEdit.text()
         wt_map = self.WTMapLineEdit.text()
-        car_part = self.car_part_correspondences[self.carPartComboBox.currentText()]
+        car_part = self.carPartComboBox.currentText().strip()
         load_condition = self.loadConditionComboBox.currentText()
         base_file_name = f"{model}_{wt_run}_FV_Sauber_STD_MAP_{wt_map}_{car_part}_{load_condition}"
 
@@ -928,8 +928,22 @@ class MainApp(QMainWindow):
                 QMessageBox.information(self, "Save Cancelled", "Save operation cancelled by user.")
                 return
 
+        # Extract case description from wt_map
+        self.case_description = None
+        case_descriptions = ["SL_01", "LS_02", "LS_03", "VHS_04", "LS_05", "MS_06", "MS_07", "MS_09", "LS_09", "LS_10"]
+        for case in case_descriptions:
+            if case in wt_map:
+                self.case_description = case
+                break
+
+        if self.case_description:
+            case_number = self.case_description.split('_')[1]
+        else:
+            QMessageBox.warning(self, "Warning", "Case description not found in WT Map.")
+            return
+
         # Proceed with the save process if the files do not exist or if overwrite is confirmed.
-        self.startSaveProcess()
+        self.startSaveProcess(wt_run, self.case_description, case_number)
 
     def validateRequiredFields(self):
         """
@@ -953,7 +967,7 @@ class MainApp(QMainWindow):
 
         return missing_fields
 
-    def startSaveProcess(self):
+    def startSaveProcess(self, wt_run, case_description, case_number):
         """
         Starts the actual save process by setting up a SaveWorker within a new thread.
         This method manages the lifecycle of the save operation, including starting and cleaning up the thread.
@@ -982,6 +996,18 @@ class MainApp(QMainWindow):
         # Start the save thread and initiate the loading animation to indicate saving is in progress.
         self.saveThread.start()
         startLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.saveSection.scrollArea)
+
+        # Pass the data to the UploadWorker after save is complete
+        self.uploadWorker = UploadWorker(self, self.scaled_mesh, self.carPartComboBox.currentText(), "your_target_directory_here", wt_run, case_description, case_number)
+        self.uploadWorker.finished.connect(self.cleanupUploadProcess)
+        self.uploadWorker.error.connect(self.handleUploadError)
+        self.uploadWorker.log_message.connect(self.updateUploadLog)
+
+        # Create and configure a new thread for the upload operation.
+        self.uploadThread = QThread()
+        self.uploadWorker.moveToThread(self.uploadThread)
+        self.uploadThread.started.connect(self.uploadWorker.run)
+        self.uploadThread.finished.connect(self.uploadThread.deleteLater)
 
     def handleSaveError(self, error):
         """
@@ -1078,7 +1104,7 @@ class MainApp(QMainWindow):
         target_directory = r"D:/sandbox_test"
 
         # Instantiate the UploadWorker
-        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, target_directory)
+        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, target_directory, wt_run, self.case_description, self.case_description.split('_')[1])
         self.uploadWorker.finished.connect(self.cleanupUploadProcess)
         self.uploadWorker.error.connect(self.handleUploadError)
         self.uploadWorker.log_message.connect(self.updateUploadLog)
@@ -1090,6 +1116,7 @@ class MainApp(QMainWindow):
         self.uploadThread.finished.connect(self.uploadThread.deleteLater)
         self.uploadThread.start()
         startLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
+
 
 
     def cleanupUploadProcess(self):

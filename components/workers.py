@@ -251,7 +251,7 @@ class UploadWorker(QObject):
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
 
-    def __init__(self, main_app, scaled_mesh, car_part, target_directory):
+    def __init__(self, main_app, scaled_mesh, car_part, target_directory, wt_run, case_description, case_number):
         """
         Initializes the worker with the application context and upload parameters.
 
@@ -260,12 +260,18 @@ class UploadWorker(QObject):
             scaled_mesh: The scaled mesh to be uploaded.
             car_part: The car part name.
             target_directory: The target directory for the upload.
+            wt_run: The WT run number.
+            case_description: The case description.
+            case_number: The case number.
         """
         super(UploadWorker, self).__init__()
         self.main_app = main_app
         self.scaled_mesh = scaled_mesh
         self.car_part = car_part
         self.target_directory = target_directory
+        self.wt_run = wt_run
+        self.case_description = case_description
+        self.case_number = case_number
         self.active = True
 
     def stop(self):
@@ -288,8 +294,7 @@ class UploadWorker(QObject):
         try:
             # Create temporary directory for storing the files before upload
             temp_dir = tempfile.mkdtemp()
-            wt_run = self.main_app.WTRunLineEdit.text().strip()
-            wt_run_folder = os.path.join(temp_dir, wt_run)
+            wt_run_folder = os.path.join(temp_dir, self.wt_run)
             os.makedirs(wt_run_folder)
 
             # Create the "distiller2" folder inside the WT Run folder
@@ -341,7 +346,8 @@ class UploadWorker(QObject):
 
     def modify_and_save_ilauchdata(self, wt_run_folder):
         """
-        Reads the iLaunchData.xml template, modifies the car model and name, and saves it to the WT run folder.
+        Reads the iLaunchData.xml template, modifies the car model, name, run-description, project-label, project, run-label, and run,
+        and saves it to the WT run folder.
 
         Args:
             wt_run_folder (str): The path of the WT run folder where the modified XML file should be saved.
@@ -353,20 +359,56 @@ class UploadWorker(QObject):
         wt_model = self.main_app.modelLineEdit.text().strip()
         wt_model_number = wt_model[1:]  # Extract the number part from the WT model string
 
+        # Modify the car element
         car_element = root.find(".//car")
         if car_element is not None:
             car_element.set("model", wt_model)
             car_element.set("name", f"C{wt_model_number}")
+
+        # Modify the run-description element
+        car_part = self.main_app.carPartComboBox.currentText().title()  # Capitalize the first letter of each word
+        run_description_element = root.find(".//run-description")
+        if run_description_element is not None:
+            run_description_element.set("value", f"{car_part} flowviz test")
+
+        # Modify the project-label element in parent-run
+        project_label_element = root.find(".//parent-run/project-label")
+        if project_label_element is not None:
+            project_label_element.set("value", f"C{wt_model_number}-WT00")
+
+        # Modify the run-label element in parent-run
+        run_label_element = root.find(".//parent-run/run-label")
+        if run_label_element is not None:
+            run_label_element.set("value", self.wt_run)
+
+        # Modify the project element in case-info
+        case_project_element = root.find(".//case-info/labels/project")
+        if case_project_element is not None:
+            case_project_element.set("value", f"C{wt_model_number}-WT00")
+
+        # Modify the run element in case-info
+        case_run_element = root.find(".//case-info/labels/run")
+        if case_run_element is not None:
+            case_run_element.set("value", f"{self.wt_run}-FLOWVIZ")
+
+        # Modify the case and case-description elements in case-info
+        case_element = root.find(".//case-info/labels/case")
+        if case_element is not None:
+            case_element.set("value", self.case_number)
+
+        case_description_element = root.find(".//case-info/case-description")
+        if case_description_element is not None:
+            case_description_element.set("value", self.case_description)
 
         xml_file_path = os.path.join(wt_run_folder, "iLaunchData.xml")
         tree.write(xml_file_path)
 
     def copyTemplateFiles(self, wt_run_folder):
         """
-        Copies the additional XML template files to the WT run folder.
+        Copies the iLaunchData.xml and post-c44-v4.2.xml files from the templates folder to the WT Run folder.
 
         Args:
-            wt_run_folder (str): The path of the WT run folder where the template files should be copied.
+            wt_run_folder (str): The path of the WT Run folder where the files should be copied.
         """
         template_files = ["post-c44-v4.2.xml"]
         template_folder = os.path.join(os.path.dirname(__file__), '../templates')
@@ -412,6 +454,7 @@ class UploadWorker(QObject):
         """
         self.stop()
         super(UploadWorker, self).deleteLater()
+
 
 
 
