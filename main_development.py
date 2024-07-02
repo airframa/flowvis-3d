@@ -244,7 +244,7 @@ class MainApp(QMainWindow):
             "\u2022 Save the registered data: save the registered wind tunnel model 60\u0025 scale point cloud ('_registered.ply'), the up-scaled registered point cloud ('_registered_paraview.ply') "
             "and, if available, wind tunnel model 60\u0025 scale mesh ('_registered_mesh.ply') and the up-scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. The files are named according to the sandbox nomenclature"
             "The up-scaled data is intended for paraview/sandbox, where one can compare FlowVis with CFD data (100\u0025 scale).\n"
-            "\u2022 Upload to sandbox (work in progress)."
+            "\u2022 Upload to sandbox."
         )
 
         # Create a collapsible section titled "Save" with the descriptive text and add it to the provided layout.
@@ -484,10 +484,10 @@ class MainApp(QMainWindow):
         urls = event.mimeData().urls()
         if urls:  # Check if there are any URLs
             path = urls[0].toLocalFile()  # Convert the first URL to a local file path.
-            cursor_position = event.pos()  # Get the position of the cursor at the time of the drop.
+            cursor_position = event.position()  # Get the position of the cursor at the time of the drop.
 
             # Determine which widget is directly beneath the cursor at the drop position.
-            child = self.childAt(cursor_position)
+            child = self.childAt(cursor_position.toPoint())
             if child:
                 # If the widget directly under the cursor isn't a QLineEdit, traverse up the widget hierarchy to find the nearest parent QLineEdit.
                 while not isinstance(child, QLineEdit) and child is not None:
@@ -497,6 +497,8 @@ class MainApp(QMainWindow):
                     role = child.property('role')
                     if role == 'source':
                         self.loadFileLineEdit.setText(path)  # Update the 'source' line edit with the path of the dropped file.
+                        self.file_path_pcd = path  # Update the file_path_pcd for saving later.
+                        self.visualizeButton.setDisabled(False)  # Enable the visualize button
                     elif role == 'reference':
                         self.loadRefFileLineEdit.setText(path)  # Update the 'reference' line edit with the path.
 
@@ -1116,7 +1118,8 @@ class MainApp(QMainWindow):
             return
 
         # Define the target upload directory
-        self.target_directory = r"D:/sandbox_test"
+        # self.target_directory = r"D:/sandbox_test"
+        self.target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
 
         # Extract the case number
         case_number = self.case_description.split('_')[1]

@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import shutil
 import xml.etree.ElementTree as ET
+import hashlib
 
 class LoadPointCloudWorker(QObject):
     """
@@ -336,8 +337,18 @@ class UploadWorker(QObject):
             # Compress the folder
             tar_file_path = self.compressFolder(wt_run_folder)
 
+            # Calculate the checksum and create the checksum XML file
+            self.createChecksumXML(tar_file_path, wt_run_folder)
+
             # Upload the .tar file to the target directory
             self.uploadFile(tar_file_path, self.target_directory)
+
+            # Upload the checksum XML file to the target directory
+            checksum_xml_path = os.path.join(wt_run_folder, f"{self.wt_run}.xml")
+            self.uploadFile(checksum_xml_path, self.target_directory)
+
+            # Declare successful upload operation
+            self.log_message.emit(f"Successful Sandbox Upload")
 
             # Emit the finished signal to indicate the process is complete
             self.finished.emit()
@@ -457,6 +468,55 @@ class UploadWorker(QObject):
             tar.add(folder_path, arcname=os.path.basename(folder_path))
         return tar_file_path
 
+    def createChecksumXML(self, tar_file_path, wt_run_folder):
+        """
+        Creates a checksum XML file for the specified tar file and saves it in the WT run folder.
+
+        Args:
+            tar_file_path (str): The path of the tar file to create the checksum for.
+            wt_run_folder (str): The path of the WT run folder where the checksum XML file should be saved.
+        """
+        checksum = self.calculateChecksum(tar_file_path)
+        checksum_xml_path = os.path.join(wt_run_folder, f"{self.wt_run}.xml")
+        self.writeChecksumXML(checksum_xml_path, checksum, tar_file_path)
+
+    def calculateChecksum(self, file_path):
+        """
+        Calculates the SHA1 checksum for the specified file.
+
+        Args:
+            file_path (str): The path of the file to calculate the checksum for.
+
+        Returns:
+            str: The calculated checksum.
+        """
+        d = hashlib.sha1()
+        with open(file_path, "rb") as f:
+            d.update(f.read())
+        return d.hexdigest()
+
+    def writeChecksumXML(self, xml_path, checksum, tar_file_path):
+        """
+        Writes the checksum and tar file information to an XML file.
+
+        Args:
+            xml_path (str): The path of the XML file to write to.
+            checksum (str): The calculated checksum.
+            tar_file_path (str): The path of the tar file.
+        """
+        # Construct XML string with proper indentation and formatting
+        xml_content = f"""<sandbox>
+ <tarfile value="{os.path.basename(tar_file_path)}" />
+ <checksums sha1sum="{checksum}" />
+ <half-car-dataset value="false" />
+ <data-type value="flowviz" />
+</sandbox>
+"""
+        # Write the XML content to the file
+        with open(xml_path, "w", encoding="UTF-8") as xml_file:
+            xml_file.write(xml_content)
+
+
     def uploadFile(self, file_path, target_directory):
         """
         Uploads the specified file to the target directory.
@@ -470,7 +530,7 @@ class UploadWorker(QObject):
         
         target_path = os.path.join(target_directory, os.path.basename(file_path))
         shutil.copy(file_path, target_path)
-        self.log_message.emit(f"Uploaded .tar file to: {target_path}")
+        self.log_message.emit(f"Uploaded {os.path.basename(file_path)} to: {target_path}")
 
     def deleteLater(self):
         """
@@ -478,6 +538,7 @@ class UploadWorker(QObject):
         """
         self.stop()
         super(UploadWorker, self).deleteLater()
+
 
 
 
