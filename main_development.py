@@ -912,6 +912,11 @@ class MainApp(QMainWindow):
         load_condition = self.loadConditionComboBox.currentText()
         base_file_name = f"{model}_{wt_run}_FV_Sauber_STD_MAP_{wt_map}_{car_part}_{load_condition}"
 
+        # Check for invalid characters in the file name
+        if not self.isValidFileName(base_file_name):
+            QMessageBox.warning(self, "Warning", "Invalid file name. Remove special characters (such as \" or ') from the input fields.")
+            return
+
         # Get the directory of the selected file
         directory = os.path.dirname(self.file_path_pcd)
 
@@ -944,6 +949,22 @@ class MainApp(QMainWindow):
 
         # Proceed with the save process if the files do not exist or if overwrite is confirmed.
         self.startSaveProcess(wt_run, self.case_description, case_number)
+
+    def isValidFileName(self, file_name):
+        """
+        Checks if the provided file name contains any invalid characters.
+
+        Args:
+            file_name (str): The file name to check.
+
+        Returns:
+            bool: True if the file name is valid, False otherwise.
+        """
+        invalid_chars = ['"', "'"]
+        for char in invalid_chars:
+            if char in file_name:
+                return False
+        return True
 
     def validateRequiredFields(self):
         """
@@ -996,18 +1017,6 @@ class MainApp(QMainWindow):
         # Start the save thread and initiate the loading animation to indicate saving is in progress.
         self.saveThread.start()
         startLoadingAnimation(self.loadingLabel_savedata, self.loadingMovie_savedata, self.saveSection.scrollArea)
-
-        # Pass the data to the UploadWorker after save is complete
-        self.uploadWorker = UploadWorker(self, self.scaled_mesh, self.carPartComboBox.currentText(), "your_target_directory_here", wt_run, case_description, case_number)
-        self.uploadWorker.finished.connect(self.cleanupUploadProcess)
-        self.uploadWorker.error.connect(self.handleUploadError)
-        self.uploadWorker.log_message.connect(self.updateUploadLog)
-
-        # Create and configure a new thread for the upload operation.
-        self.uploadThread = QThread()
-        self.uploadWorker.moveToThread(self.uploadThread)
-        self.uploadThread.started.connect(self.uploadWorker.run)
-        self.uploadThread.finished.connect(self.uploadThread.deleteLater)
 
     def handleSaveError(self, error):
         """
@@ -1078,6 +1087,7 @@ class MainApp(QMainWindow):
         model = self.modelLineEdit.text()
         wt_run = self.WTRunLineEdit.text().strip()
         car_part = self.carPartComboBox.currentText().strip()
+        wt_map = self.WTMapLineEdit.text().strip()
 
         if not self.case_description:
             QMessageBox.warning(self, "Warning", "Please enter the case description in the WT Map.")
@@ -1086,7 +1096,7 @@ class MainApp(QMainWindow):
         if not wt_run:
             QMessageBox.warning(self, "Warning", "Please enter WT Run.")
             return
-        
+
         if not model:
             QMessageBox.warning(self, "Warning", "Please enter WT Model.")
             return
@@ -1099,12 +1109,20 @@ class MainApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "No scaled mesh available.")
             return
 
+        # Extract the map conversion name
+        map_conversion_name = self.extractMapConversionName(wt_map)
+        if not map_conversion_name:
+            QMessageBox.warning(self, "Warning", "Please enter the WT map conversion name.")
+            return
+
         # Define the target upload directory
-        # target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
-        target_directory = r"D:/sandbox_test"
+        self.target_directory = r"D:/sandbox_test"
+
+        # Extract the case number
+        case_number = self.case_description.split('_')[1]
 
         # Instantiate the UploadWorker
-        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, target_directory, wt_run, self.case_description, self.case_description.split('_')[1])
+        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, self.target_directory, wt_run, self.case_description, map_conversion_name, case_number)
         self.uploadWorker.finished.connect(self.cleanupUploadProcess)
         self.uploadWorker.error.connect(self.handleUploadError)
         self.uploadWorker.log_message.connect(self.updateUploadLog)
@@ -1117,8 +1135,21 @@ class MainApp(QMainWindow):
         self.uploadThread.start()
         startLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
 
+    def extractMapConversionName(self, wt_map):
+        """
+        Extracts the map conversion name from the WT map string.
 
+        Args:
+            wt_map (str): The WT map string.
 
+        Returns:
+            str: The extracted map conversion name, or None if not found.
+        """
+        parts = wt_map.split('_')
+        if len(parts) >= 3:
+            return parts[2]
+        return None
+    
     def cleanupUploadProcess(self):
         """
         Cleans up resources and UI components used during the upload process.

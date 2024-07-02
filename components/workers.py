@@ -251,7 +251,7 @@ class UploadWorker(QObject):
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
 
-    def __init__(self, main_app, scaled_mesh, car_part, target_directory, wt_run, case_description, case_number):
+    def __init__(self, main_app, scaled_mesh, car_part, target_directory, wt_run, case_description, map_conversion_name, case_number):
         """
         Initializes the worker with the application context and upload parameters.
 
@@ -262,6 +262,7 @@ class UploadWorker(QObject):
             target_directory: The target directory for the upload.
             wt_run: The WT run number.
             case_description: The case description.
+            map_conversion_name: The map conversion name.
             case_number: The case number.
         """
         super(UploadWorker, self).__init__()
@@ -271,6 +272,7 @@ class UploadWorker(QObject):
         self.target_directory = target_directory
         self.wt_run = wt_run
         self.case_description = case_description
+        self.map_conversion_name = map_conversion_name
         self.case_number = case_number
         self.active = True
 
@@ -328,6 +330,9 @@ class UploadWorker(QObject):
             # Copy the additional XML files to the WT Run folder
             self.copyTemplateFiles(wt_run_folder)
 
+            # Modify and save the post-c44-v4.2.xml file
+            self.modify_and_save_post_c44(wt_run_folder)
+
             # Compress the folder
             tar_file_path = self.compressFolder(wt_run_folder)
 
@@ -343,6 +348,21 @@ class UploadWorker(QObject):
         finally:
             # Set the worker's active state to False, indicating the process is no longer running
             self.active = False
+
+    def copyTemplateFiles(self, wt_run_folder):
+        """
+        Copies the iLaunchData.xml and post-c44-v4.2.xml files from the templates folder to the WT Run folder.
+
+        Args:
+            wt_run_folder (str): The path of the WT Run folder where the files should be copied.
+        """
+        template_files = ["post-c44-v4.2.xml"]
+        template_folder = os.path.join(os.path.dirname(__file__), '../templates')
+
+        for file_name in template_files:
+            src_file = os.path.join(template_folder, file_name)
+            dest_file = os.path.join(wt_run_folder, file_name)
+            shutil.copy(src_file, dest_file)
 
     def modify_and_save_ilauchdata(self, wt_run_folder):
         """
@@ -403,20 +423,24 @@ class UploadWorker(QObject):
         xml_file_path = os.path.join(wt_run_folder, "iLaunchData.xml")
         tree.write(xml_file_path)
 
-    def copyTemplateFiles(self, wt_run_folder):
+    def modify_and_save_post_c44(self, wt_run_folder):
         """
-        Copies the iLaunchData.xml and post-c44-v4.2.xml files from the templates folder to the WT Run folder.
+        Reads the post-c44-v4.2.xml template, modifies the wind-tunnel-map-conversion name,
+        and saves it to the WT run folder.
 
         Args:
-            wt_run_folder (str): The path of the WT Run folder where the files should be copied.
+            wt_run_folder (str): The path of the WT run folder where the modified XML file should be saved.
         """
-        template_files = ["post-c44-v4.2.xml"]
-        template_folder = os.path.join(os.path.dirname(__file__), '../templates')
+        post_c44_path = os.path.join(wt_run_folder, "post-c44-v4.2.xml")
+        tree = ET.parse(post_c44_path)
+        root = tree.getroot()
 
-        for file_name in template_files:
-            src_file = os.path.join(template_folder, file_name)
-            dest_file = os.path.join(wt_run_folder, file_name)
-            shutil.copy(src_file, dest_file)
+        # Modify the wind-tunnel-map-conversion element
+        map_conversion_element = root.find(".//wind-tunnel-map-conversion")
+        if map_conversion_element is not None:
+            map_conversion_element.set("name", self.map_conversion_name)
+
+        tree.write(post_c44_path)
 
     def compressFolder(self, folder_path):
         """
