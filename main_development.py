@@ -1043,7 +1043,7 @@ class MainApp(QMainWindow):
         # Check if there is an active save worker and ensure it is properly deleted to free resources.
         if self.saveWorker:
             # Store the scaled mesh in the main app for later use in upload
-            self.scaled_mesh = self.saveWorker.scaled_mesh
+            self.mesh = self.saveWorker.mesh
             self.saveWorker.deleteLater()  # Safely delete the worker object.
             self.saveWorker = None         # Remove the reference to the worker.
 
@@ -1107,7 +1107,7 @@ class MainApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "An upload operation is already in progress. Please wait for it to complete.")
             return
 
-        if not hasattr(self, 'scaled_mesh') or self.scaled_mesh is None:
+        if not hasattr(self, 'mesh') or self.mesh is None:
             QMessageBox.warning(self, "Warning", "No scaled mesh available.")
             return
 
@@ -1125,7 +1125,7 @@ class MainApp(QMainWindow):
         case_number = self.case_description.split('_')[1]
 
         # Instantiate the UploadWorker
-        self.uploadWorker = UploadWorker(self, self.scaled_mesh, car_part, self.target_directory, wt_run, self.case_description, map_conversion_name, case_number)
+        self.uploadWorker = UploadWorker(self, self.mesh, car_part, self.target_directory, wt_run, self.case_description, map_conversion_name, case_number)
         self.uploadWorker.finished.connect(self.cleanupUploadProcess)
         self.uploadWorker.error.connect(self.handleUploadError)
         self.uploadWorker.log_message.connect(self.updateUploadLog)

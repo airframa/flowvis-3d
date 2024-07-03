@@ -166,7 +166,7 @@ class SaveWorker(QObject):
         self.transformation = transformation
         self.composed_filename = composed_filename
         self.save_mesh = save_mesh
-        self.scaled_mesh = None  # Add an instance variable to store the scaled mesh
+        self.mesh = None  # Add an instance variable to store the scaled mesh
         self.active = True
 
     def stop(self):
@@ -211,13 +211,14 @@ class SaveWorker(QObject):
                             # save unscaled mesh
                             o3d.io.write_triangle_mesh(output_mesh_file_raw, mesh_registered)
                             saved_files.append("original registered mesh")
+                            # store un-scaled mesh for sandbox upload - scaling is performed in sandbox
+                            self.mesh = mesh_registered
                             # save scaled mesh
-                            mesh_registered.scale(scale, center=(0, 0, 0))
-                            o3d.io.write_triangle_mesh(output_mesh_file, mesh_registered)
+                            mesh_scaled = copy.deepcopy(mesh_registered)
+                            mesh_scaled.scale(scale, center=(0, 0, 0))
+                            o3d.io.write_triangle_mesh(output_mesh_file, mesh_scaled)
                             saved_files.append("CFD-scaled registered mesh")
                             summary_message = "Mesh data available for the current .ply file\n"
-                            # store scaled mesh for sandbox upload
-                            self.scaled_mesh = mesh_registered
                         else:
                             summary_message = "No mesh data available for the current .ply file\n"
                     except Exception as e:
@@ -252,13 +253,13 @@ class UploadWorker(QObject):
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
 
-    def __init__(self, main_app, scaled_mesh, car_part, target_directory, wt_run, case_description, map_conversion_name, case_number):
+    def __init__(self, main_app, mesh, car_part, target_directory, wt_run, case_description, map_conversion_name, case_number):
         """
         Initializes the worker with the application context and upload parameters.
 
         Args:
             main_app: Reference to the main application instance.
-            scaled_mesh: The scaled mesh to be uploaded.
+            mesh: The mesh to be uploaded (WT coordinates). The scaling to CFD coordinates is performed in SandBox.
             car_part: The car part name.
             target_directory: The target directory for the upload.
             wt_run: The WT run number.
@@ -268,7 +269,7 @@ class UploadWorker(QObject):
         """
         super(UploadWorker, self).__init__()
         self.main_app = main_app
-        self.scaled_mesh = scaled_mesh
+        self.mesh = mesh
         self.car_part = car_part
         self.target_directory = target_directory
         self.wt_run = wt_run
@@ -311,7 +312,7 @@ class UploadWorker(QObject):
             flowviz_folder = os.path.join(distiller2_folder, "flowviz")
             os.makedirs(flowviz_folder)
             mesh_file_path = os.path.join(flowviz_folder, f"{car_part_short_name}.ply")
-            o3d.io.write_triangle_mesh(mesh_file_path, self.scaled_mesh)
+            o3d.io.write_triangle_mesh(mesh_file_path, self.mesh)
 
             # Load and modify the data.xml template
             template_path = os.path.join(os.path.dirname(__file__), '../templates/data.xml')
