@@ -81,9 +81,9 @@ The application supports saving the registered point cloud data and uploading it
 - Automatically upload either the registered data or the input mesh (according to the user preference) to a predefined sandbox location for sharing and comparison with the available CFD data. 
 
 
-🚧 **Work in Progress**: Application currently under development. Further functionalities will be added soon. 
-
 ## Future Functionalities
+
+🚧 **Work in Progress**: Application currently under development. Further functionalities will be added soon. The coming features will include:
 
 ### 1. Preprocessing
 The preprocessing functionality will include:
