@@ -1,8 +1,8 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox, QComboBox
-from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QWidget, QPushButton, QLineEdit, QFileDialog, QLabel, QTextEdit,  QMessageBox, QComboBox, QDialog, QHBoxLayout, QToolButton
+from PySide6.QtGui import QFont, QPixmap, QDragEnterEvent, QDropEvent, QTextOption, QGuiApplication, QIcon
 from PySide6.QtCore import Qt, QThread
-from components.utils import CollapsibleSection, SettingsSection, applyButtonStyle, applyLineEditStyle, applyTextAndScrollBarStyle, applyComboBoxStyle, setupInputField, createLoadingWheel, startLoadingAnimation, stopLoadingAnimation
-from components.workers import LoadPointCloudWorker, LoadReferenceWorker, RegistrationWorker, SaveWorker, UploadWorker
+from components.utils import CollapsibleSection, SettingsSection, UploadOptionsDialog, applyButtonStyle, applyLineEditStyle, applyTextAndScrollBarStyle, applyComboBoxStyle, setupInputField, createLoadingWheel, startLoadingAnimation, stopLoadingAnimation
+from components.workers import LoadPointCloudWorker, LoadMeshWorker, LoadReferenceWorker, RegistrationWorker, SaveWorker, UploadWorker
 import open3d as o3d
 import os
 
@@ -41,9 +41,11 @@ class MainApp(QMainWindow):
         self.cached_pcd = None
         self.cached_pcd_path = None
         self.registered_pcd = None
+        self.registered_mesh = None
         self.transformation = None
         self.workerIsActive = False
-        self.case_description = None  # Initialize case_description variable
+        self.case_description = None  
+        self.mesh_upload = None
 
     def setupUI(self):
         """
@@ -52,9 +54,124 @@ class MainApp(QMainWindow):
         centralWidget = QWidget(self)
         self.setCentralWidget(centralWidget)
         layout = QVBoxLayout(centralWidget)
+
+        # Create a layout to hold the reset button and the main content
+        top_layout = QHBoxLayout()
+        layout.addLayout(top_layout)
+
+        # Add reset button to the top right
+        self.setupResetButton(top_layout)
+
+        # Add a widget to take the remaining space in the top layout
+        spacer_widget = QWidget()
+        top_layout.addWidget(spacer_widget)
+        top_layout.setStretch(0, 1)  # Make the spacer take up all the extra space
+
         self.setupLogo(layout)
         self.setupSections(layout)
         self.show()
+
+    def setupResetButton(self, layout):
+        """
+        Set up the reset button and info icon in the application's user interface.
+        """
+        # Create the reset button
+        self.resetButton = QPushButton()
+        reset_icon = QPixmap("./ui/reset_settings_v2.png")
+        scaled_icon = reset_icon.scaled(25, 25, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.resetButton.setIcon(QIcon(scaled_icon))
+        self.resetButton.setIconSize(scaled_icon.rect().size())
+        self.resetButton.setFixedSize(30, 30)
+        self.resetButton.clicked.connect(self.resetSettings)
+        
+        # Create the info icon button
+        self.infoButton = QToolButton()
+        self.infoButton.setIcon(QIcon("./ui/info_icon_v2.png"))
+        self.infoButton.setFixedSize(30, 30)
+        self.infoButton.setStyleSheet("QToolButton { border: none; color: white; background-color: black; }")
+        self.infoButton.setToolTip("Clicking the reset button will reset all settings to their default values and clear all logs.")
+
+        # Add the reset button and info icon to the top-right corner
+        top_right_layout = QHBoxLayout()
+        top_right_layout.addStretch()
+        top_right_layout.addWidget(self.resetButton)
+        top_right_layout.addWidget(self.infoButton)
+    
+        # Add the top-right layout to the main layout
+        layout.addLayout(top_right_layout)
+
+    def resetSettings(self):
+        """
+        Reset all settings and clear logs to reinitialize the application.
+        """
+        # Stop and cleanup any active threads
+        self.cleanupActiveThreads()
+
+        # Reinitialize variables
+        self.initVariables()
+        
+        # Clear all input fields and logs
+        self.loadFileLineEdit.clear()
+        self.loadRefFileLineEdit.clear()
+        self.registrationLogLabel.clear()
+        self.saveLogLabel.clear()
+        self.sandboxLogLabel.clear()
+        
+        # Disable buttons that should not be active until new input is provided
+        self.visualizeButton.setDisabled(True)
+        self.visualizeRegisteredButton.setDisabled(True)
+        
+        # Optionally, reset the file path and cached data
+        self.file_path_pcd = None
+        self.cached_pcd = None
+        self.cached_pcd_path = None
+        self.reference_geometry = None
+        self.cached_reference_path = None
+        self.registered_pcd = None
+        self.transformation = None
+        self.case_description = None
+        self.mesh_upload = None
+
+        # # Reset model, WT Run, WT Map, Car Part, and Load Condition fields
+        # self.modelLineEdit.clear()
+        # self.WTRunLineEdit.clear()
+        # self.WTMapLineEdit.clear()
+        # self.carPartComboBox.setCurrentIndex(0)
+        # self.loadConditionComboBox.setCurrentIndex(0)
+
+        QMessageBox.information(self, "Settings Reset", "All settings have been reset.")
+
+    def cleanupActiveThreads(self):
+        """
+        Stops and cleans up any active threads and their associated workers.
+        """
+        # Stop and cleanup the registration thread
+        if self.registrationThread and self.registrationThread.isRunning():
+            self.registrationThread.quit()
+            self.registrationThread.wait()
+            self.registrationThread.deleteLater()
+            self.registrationThread = None
+
+        # Stop and cleanup the visualization thread
+        if self.visualizationThread and self.visualizationThread.isRunning():
+            self.visualizationThread.quit()
+            self.visualizationThread.wait()
+            self.visualizationThread.deleteLater()
+            self.visualizationThread = None
+
+        # Stop and cleanup the save thread
+        if self.saveThread and self.saveThread.isRunning():
+            self.saveThread.quit()
+            self.saveThread.wait()
+            self.saveThread.deleteLater()
+            self.saveThread = None
+
+        # Stop and cleanup the upload thread
+        if self.uploadThread and self.uploadThread.isRunning():
+            self.uploadThread.quit()
+            self.uploadThread.wait()
+            self.uploadThread.deleteLater()
+            self.uploadThread = None
 
     def setupLogo(self, layout):
         """
@@ -244,7 +361,7 @@ class MainApp(QMainWindow):
             "\u2022 Save the registered data: save the registered wind tunnel model 60\u0025 scale point cloud ('_registered.ply'), the up-scaled registered point cloud ('_registered_paraview.ply') "
             "and, if available, wind tunnel model 60\u0025 scale mesh ('_registered_mesh.ply') and the up-scaled registered mesh ('_registered_mesh_paraview.ply') in the input point cloud original folder. The files are named according to the sandbox nomenclature"
             "The up-scaled data is intended for paraview/sandbox, where one can compare FlowVis with CFD data (100\u0025 scale).\n"
-            "\u2022 Upload to sandbox."
+            "\u2022 Upload to Sandbox: according to the provided session parameters, the user can upload automatically the scanned mesh to Sandbox. If a registered version of the input mesh is available, this is will be the item uploaded to Sandbox." # ADD BUTTON TO ASK USER WHAT TO UPLOAD
         )
 
         # Create a collapsible section titled "Save" with the descriptive text and add it to the provided layout.
@@ -262,7 +379,7 @@ class MainApp(QMainWindow):
         # Fetch WT Run data
         self.modelLineEdit = setupInputField(self.saveSection.contentLayout(), "Model", "M44")
         self.WTRunLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Run", "4748")
-        self.WTMapLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Map", "STD_MAP_056d_v258_LS_03")
+        self.WTMapLineEdit = setupInputField(self.saveSection.contentLayout(), "WT Map", "STD_MAP_056d_v258_LS_03") 
 
         # Add "Car Part" label
         carPartLabel = QLabel("Car Part")
@@ -402,7 +519,7 @@ class MainApp(QMainWindow):
         Setup additional sections such as Pre-process, Segment, and Raster (currently place-holders).
         """
         info_text_preprocessing = (
-            "Segmentation Section (work in progress):\n"
+            "Preprocessing Section (work in progress):\n"
             "\u2022 Downsample the input registered point cloud.\n"
             "\u2022 Estimate the point cloud normals."
         )
@@ -697,7 +814,7 @@ class MainApp(QMainWindow):
         self.registrationThread.finished.connect(self.registrationThread.deleteLater)
         self.registrationThread.start()  # Begin the registration process.
 
-    def handleRegistrationComplete(self, pcd_registered, transformation, log_text):
+    def handleRegistrationComplete(self, pcd_registered, transformation, log_text, pcd_registered_scaled, registered_mesh, registered_mesh_scaled):
         """
         Handles the successful completion of the registration process. Updates the UI and caches the results.
 
@@ -705,23 +822,21 @@ class MainApp(QMainWindow):
             pcd_registered: The registered point cloud returned by the registration worker.
             transformation: The transformation matrix resulting from the registration.
             log_text (str): Text to log in the UI, typically containing details about the registration process.
+            pcd_registered_scaled: The scaled registered point cloud.
+            registered_mesh: The registered mesh (if available).
+            registered_mesh_scaled: The scaled registered mesh (if available).
         """
-        # Print to console for debugging purposes to indicate the slot was triggered and to show received data.
-        # print("Registration complete slot triggered.")
-        # print("Received data:", pcd_registered)
-
-        # Stop any ongoing loading animations in the UI, signaling that the registration has completed.
         stopLoadingAnimation(self.loadingLabel_registration, self.loadingMovie_registration, self.registrationSection.scrollArea)
-
-        # Update the registration log in the UI with the provided log text.
         self.registrationLogLabel.setText(log_text)
 
-        # Cache the successfully registered point cloud and transformation matrix for later use.
         self.registered_pcd = pcd_registered
         self.transformation = transformation
+        self.registered_pcd_scaled = pcd_registered_scaled
+        self.registered_mesh = registered_mesh
+        self.registered_mesh_scaled = registered_mesh_scaled
 
-        # Print to console for debugging purposes to indicate data storage state post-registration.
-        # print("Data stored in MainApp immediately after registration:", self.registered_pcd)
+        if registered_mesh is None:
+            QMessageBox.warning(self, "Registration Complete", "No mesh data available. Upload to Sandbox is not possible.")
 
     def handleRegistrationError(self, error_message):
         """
@@ -906,6 +1021,11 @@ class MainApp(QMainWindow):
             QMessageBox.warning(self, "Warning", "No file selected. Please select a file first.")
             return
 
+        # Check if registration data is available
+        if self.registered_pcd is None or self.registered_pcd_scaled is None:
+            QMessageBox.warning(self, "Warning", "No registered data available. Data saving cannot be performed.")
+            return
+
         # Generate the base file name string
         model = self.modelLineEdit.text()
         wt_run = self.WTRunLineEdit.text()
@@ -1004,7 +1124,7 @@ class MainApp(QMainWindow):
         composed_filename = self.fileNameLineEdit.text()
 
         # Instantiate the SaveWorker with the necessary data for saving.
-        self.saveWorker = SaveWorker(self, self.file_path_pcd, self.registered_pcd, self.transformation, composed_filename, save_mesh=True)
+        self.saveWorker = SaveWorker(self, self.file_path_pcd, self.registered_pcd, self.registered_pcd_scaled, self.registered_mesh, self.registered_mesh_scaled, composed_filename)
         # Connect the worker's signals to appropriate slots for handling completion, errors, and log messages.
         self.saveWorker.finished.connect(self.cleanupSaveProcess)
         self.saveWorker.error.connect(self.handleSaveError)
@@ -1042,8 +1162,6 @@ class MainApp(QMainWindow):
 
         # Check if there is an active save worker and ensure it is properly deleted to free resources.
         if self.saveWorker:
-            # Store the scaled mesh in the main app for later use in upload
-            self.mesh = self.saveWorker.mesh
             self.saveWorker.deleteLater()  # Safely delete the worker object.
             self.saveWorker = None         # Remove the reference to the worker.
 
@@ -1085,57 +1203,127 @@ class MainApp(QMainWindow):
         """
         Initiates the upload of registered data to a sandbox environment.
         """
+        # Clear any previous logs in the sandbox log label.
         self.sandboxLogLabel.clear()
+
+        # Re-initialize the mesh_upload variable to ensure it is updated
+        self.mesh_upload = None
+
+        # Retrieve user inputs from the UI.
         model = self.modelLineEdit.text()
         wt_run = self.WTRunLineEdit.text().strip()
         car_part = self.carPartComboBox.currentText().strip()
         wt_map = self.WTMapLineEdit.text().strip()
 
+        # Ensure necessary inputs are provided.
         if not self.case_description:
             QMessageBox.warning(self, "Warning", "Please enter the case description in the WT Map.")
             return
-
         if not wt_run:
             QMessageBox.warning(self, "Warning", "Please enter WT Run.")
             return
-
         if not model:
             QMessageBox.warning(self, "Warning", "Please enter WT Model.")
             return
 
+        # Prevent multiple concurrent upload operations.
         if self.uploadThread and self.uploadThread.isRunning():
             QMessageBox.warning(self, "Warning", "An upload operation is already in progress. Please wait for it to complete.")
             return
 
-        if not hasattr(self, 'mesh') or self.mesh is None:
-            QMessageBox.warning(self, "Warning", "No scaled mesh available.")
+        # Show the upload options dialog
+        dialog = UploadOptionsDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            upload_type, scale = dialog.getSelectedOptions()
+
+            if upload_type == "registered":
+                if self.registered_mesh is not None:
+                    self.mesh_upload = self.registered_mesh
+                    self.continueUploadProcess()
+                else:
+                    QMessageBox.warning(self, "Warning", "No registered mesh available.")
+            elif upload_type == "input":
+                if self.file_path_pcd is not None:
+                    if scale is None:
+                        QMessageBox.warning(self, "Warning", "Please select the input file scale.")
+                        return
+                    # Start the loading animation to indicate an ongoing process.
+                    startLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
+
+                    # Create and start the mesh loading worker.
+                    self.meshWorker = LoadMeshWorker(self.file_path_pcd, scale)
+                    self.meshThread = QThread()
+                    self.meshWorker.moveToThread(self.meshThread)
+                    self.meshWorker.finished.connect(self.handleMeshLoadComplete)
+                    self.meshWorker.finished.connect(self.meshThread.quit)
+                    self.meshWorker.finished.connect(self.meshWorker.deleteLater)
+                    self.meshThread.finished.connect(self.meshThread.deleteLater)
+                    self.meshThread.started.connect(self.meshWorker.run)
+                    self.meshThread.start()
+                else:
+                    QMessageBox.warning(self, "Warning", "No input mesh available.")
+        else:
+            # User cancelled the dialog
             return
 
-        # Extract the map conversion name
+    def handleMeshLoadComplete(self, mesh, error_message):
+        """
+        Handles the completion of the mesh loading process.
+        """
+        # Stop the loading animation regardless of success or error.
+        stopLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
+
+        # Handle errors during mesh loading.
+        if error_message:
+            QMessageBox.critical(self, "Mesh Load Error", error_message)
+            return
+
+        # If a mesh was successfully loaded, proceed with the upload process.
+        if mesh:
+            self.mesh_upload = mesh
+            self.continueUploadProcess()
+        else:
+            # Alert the user if no mesh was loaded.
+            QMessageBox.warning(self, "Load Warning", "The input file has no mesh data.")
+
+    def continueUploadProcess(self):
+        """
+        Continues the upload process after verifying all necessary data is available.
+        """
+        # Extract the map conversion name from the WT map.
+        wt_map = self.WTMapLineEdit.text().strip()
         map_conversion_name = self.extractMapConversionName(wt_map)
         if not map_conversion_name:
             QMessageBox.warning(self, "Warning", "Please enter the WT map conversion name.")
             return
 
-        # Define the target upload directory
-        # self.target_directory = r"D:/sandbox_test"
+        # Define the target upload directory.
         self.target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
 
-        # Extract the case number
+        # Extract the case number from the case description.
         case_number = self.case_description.split('_')[1]
 
-        # Instantiate the UploadWorker
-        self.uploadWorker = UploadWorker(self, self.mesh, car_part, self.target_directory, wt_run, self.case_description, map_conversion_name, case_number)
+        # Retrieve user inputs from the UI.
+        model = self.modelLineEdit.text()
+        wt_run = self.WTRunLineEdit.text().strip()
+        car_part = self.carPartComboBox.currentText().strip()
+
+        # Instantiate the UploadWorker with the necessary parameters.
+        self.uploadWorker = UploadWorker(self, self.mesh_upload, car_part, self.target_directory, wt_run, self.case_description, map_conversion_name, case_number)
+        
+        # Connect the worker's signals to appropriate slots.
         self.uploadWorker.finished.connect(self.cleanupUploadProcess)
         self.uploadWorker.error.connect(self.handleUploadError)
         self.uploadWorker.log_message.connect(self.updateUploadLog)
 
-        # Create and start the thread
+        # Create and start the thread for the upload process.
         self.uploadThread = QThread()
         self.uploadWorker.moveToThread(self.uploadThread)
         self.uploadThread.started.connect(self.uploadWorker.run)
         self.uploadThread.finished.connect(self.uploadThread.deleteLater)
         self.uploadThread.start()
+
+        # Start the loading animation to indicate an ongoing upload process.
         startLoadingAnimation(self.loadingLabel_upload, self.loadingMovie_upload, self.saveSection.scrollArea)
 
     def extractMapConversionName(self, wt_map):

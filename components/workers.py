@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QThread
 from components.point_cloud_registration import PointCloudRegistration
 from components.point_cloud_utils import load_pcd
 import open3d as o3d
@@ -78,11 +78,49 @@ class LoadReferenceWorker(QObject):
             self.active = False  # Disable any further activity.
         super(LoadReferenceWorker, self).deleteLater()  # Proceed with QObject deletion.
 
+class LoadMeshWorker(QObject):
+    """
+    Asynchronously loads mesh data and emits signals on completion or error.
+    """
+    finished = Signal(object, str)  # Emits mesh data or an error message.
+
+    def __init__(self, file_path=None, scale=None, parent=None):
+        """
+        Initializes the worker with an optional file path, scale, and parent QObject.
+        """
+        super().__init__(parent)
+        self.file_path = file_path  # Path to the initial point cloud file.
+        self.scale = scale  # Scale selection (WT or CFD).
+
+    def run(self):
+        """
+        Loads mesh data based on the initial file path and scale, emitting finished signal on success or failure.
+        Designed to run in a separate thread to keep UI responsive.
+        """
+        try:
+            # Attempt to load the mesh
+            mesh = o3d.io.read_triangle_mesh(self.file_path)
+            # Check if the mesh contains any triangles
+            if len(mesh.triangles) == 0:
+                raise ValueError("The loaded file does not contain mesh data, only point cloud vertices.")
+
+            # Scale the mesh if the scale selection is CFD (100%)
+            if self.scale == "CFD":
+                mesh_scaled = copy.deepcopy(mesh)
+                mesh_scaled.scale(600, center=(0, 0, 0))
+                mesh = mesh_scaled
+
+            # Emit the loaded (and possibly scaled) mesh with no error message
+            self.finished.emit(mesh, "")
+        except Exception as e:
+            # On error, emit None and the error message
+            self.finished.emit(None, str(e))
+
 class RegistrationWorker(QObject):
     """
     Manages the asynchronous registration of point clouds and communicates results via signals.
     """
-    finished = Signal(object, object, str)  # Emitted with the registered point cloud, transformation matrix, and log message.
+    finished = Signal(object, object, str, object, object, object)  # Updated signal to include additional outputs
     error = Signal(str)  # Emitted with error message.
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
@@ -127,9 +165,31 @@ class RegistrationWorker(QObject):
                 desired_fitness_icp=self.desired_fitness_icp
             )
 
+            # Scale registered pcd to CFD coordinates
+            pcd_registered_scaled = copy.deepcopy(pcd_registered)
+            pcd_registered_scaled.scale(1 / 600, center=(0, 0, 0))  # Scale the registered point cloud
+
+            # Initialize variables for mesh data
+            registered_mesh = None
+            registered_mesh_scaled = None
+
+            # Try to read and process the mesh
+            try:
+                mesh = o3d.io.read_triangle_mesh(self.sourcePath)
+                if len(mesh.triangles) > 0:
+                    registered_mesh = mesh.transform(transformation)
+                    # Scale registered mesh
+                    registered_mesh_scaled = copy.deepcopy(registered_mesh)
+                    registered_mesh_scaled.scale(1 / 600, center=(0, 0, 0))
+                    log_text += "\nMesh data available for the current .ply file."
+                else:
+                    log_text += "\nNo mesh data available for the current .ply file."
+            except Exception as e:
+                log_text += f"\nFailed to read mesh data: {str(e)}"
+                log_text += "\nUpload to Sandbox is not possible without mesh data."
+
             if self.active:
-                self.finished.emit(pcd_registered, transformation, log_text)  # Emit successful registration results.
-                # print("Emitting finished signal with:", pcd_registered, transformation, log_text)
+                self.finished.emit(pcd_registered, transformation, log_text, pcd_registered_scaled, registered_mesh, registered_mesh_scaled)  # Emit successful registration results with additional outputs
 
         except Exception as e:
             if self.active:
@@ -155,7 +215,7 @@ class SaveWorker(QObject):
     requestStop = Signal()  # Signal to request stopping the process.
     active = False  # Indicates whether the worker is actively processing.
 
-    def __init__(self, main_app, file_path, registered_pcd, transformation, composed_filename, save_mesh=False):
+    def __init__(self, main_app, file_path, registered_pcd, registered_pcd_scaled, registered_mesh, registered_mesh_scaled, composed_filename):
         """
         Initializes the worker with the application context and saving parameters.
         """
@@ -163,10 +223,10 @@ class SaveWorker(QObject):
         self.main_app = main_app
         self.file_path_pcd = file_path
         self.registered_pcd = registered_pcd
-        self.transformation = transformation
+        self.registered_pcd_scaled = registered_pcd_scaled
+        self.registered_mesh = registered_mesh
+        self.registered_mesh_scaled = registered_mesh_scaled
         self.composed_filename = composed_filename
-        self.save_mesh = save_mesh
-        self.mesh = None  # Add an instance variable to store the scaled mesh
         self.active = True
 
     def stop(self):
@@ -187,49 +247,26 @@ class SaveWorker(QObject):
             return
         
         try:
+            directory_path = os.path.dirname(self.file_path_pcd)
+            saved_files = []
+
             if self.registered_pcd is not None:
-                pcd_copy = copy.deepcopy(self.registered_pcd)
-                directory_path = os.path.dirname(self.file_path_pcd)
                 output_file_raw = os.path.join(directory_path, f"{self.composed_filename}_registered.ply")
                 output_file_scaled = os.path.join(directory_path, f"{self.composed_filename}_registered_paraview.ply")
-                o3d.io.write_point_cloud(output_file_raw, pcd_copy)
-                scale = 1 / 600
-                registered_pcd_scaled = pcd_copy.scale(scale, center=(0, 0, 0))
-                o3d.io.write_point_cloud(output_file_scaled, registered_pcd_scaled)
-                # Store saved file for output
-                saved_files = ["original registered point cloud", "CFD-scaled registered point cloud"]
+                o3d.io.write_point_cloud(output_file_raw, self.registered_pcd)
+                o3d.io.write_point_cloud(output_file_scaled, self.registered_pcd_scaled)
+                saved_files.extend(["original registered point cloud", "CFD-scaled registered point cloud"])
 
-                if self.save_mesh:
-                    try:
-                        mesh = o3d.io.read_triangle_mesh(self.file_path_pcd)
-                        if len(mesh.triangles) > 0:
-                            # define output file paths
-                            output_mesh_file_raw = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh.ply")
-                            output_mesh_file = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh_paraview.ply")
-                            # transform mesh
-                            mesh_registered = mesh.transform(self.transformation)
-                            # save unscaled mesh
-                            o3d.io.write_triangle_mesh(output_mesh_file_raw, mesh_registered)
-                            saved_files.append("original registered mesh")
-                            # store un-scaled mesh for sandbox upload - scaling is performed in sandbox
-                            self.mesh = mesh_registered
-                            # save scaled mesh
-                            mesh_scaled = copy.deepcopy(mesh_registered)
-                            mesh_scaled.scale(scale, center=(0, 0, 0))
-                            o3d.io.write_triangle_mesh(output_mesh_file, mesh_scaled)
-                            saved_files.append("CFD-scaled registered mesh")
-                            summary_message = "Mesh data available for the current .ply file\n"
-                        else:
-                            summary_message = "No mesh data available for the current .ply file\n"
-                    except Exception as e:
-                        self.error.emit(str(e))
-                        summary_message = "Failed to read mesh data\n"
+            if self.registered_mesh is not None:
+                output_mesh_file_raw = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh.ply")
+                output_mesh_file = os.path.join(directory_path, f"{self.composed_filename}_registered_mesh_paraview.ply")
+                o3d.io.write_triangle_mesh(output_mesh_file_raw, self.registered_mesh)
+                o3d.io.write_triangle_mesh(output_mesh_file, self.registered_mesh_scaled)
+                saved_files.extend(["original registered mesh", "CFD-scaled registered mesh"])
 
-                # Compile summary of saved files and their location.
-                summary_message += f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
-                self.log_message.emit(summary_message)
-            else:
-                self.log_message.emit("No registered point cloud available. Perform registration first.")
+            summary_message = f"Registered data ({', '.join(saved_files)}) saved in the directory: {directory_path}"
+            self.log_message.emit(summary_message)
+
         except Exception as e:
             self.error.emit(str(e))
         finally:
@@ -343,6 +380,9 @@ class UploadWorker(QObject):
 
             # Upload the .tar file to the target directory
             self.uploadFile(tar_file_path, self.target_directory)
+
+            # Apply a 3 s delay to make sure that the .tar file is uploaded in advance with respect to the corresponding .xml file
+            QThread.sleep(3)
 
             # Upload the checksum XML file to the target directory
             checksum_xml_path = os.path.join(wt_run_folder, f"{self.wt_run}.xml")
@@ -517,7 +557,6 @@ class UploadWorker(QObject):
         with open(xml_path, "w", encoding="UTF-8") as xml_file:
             xml_file.write(xml_content)
 
-
     def uploadFile(self, file_path, target_directory):
         """
         Uploads the specified file to the target directory.
@@ -539,15 +578,6 @@ class UploadWorker(QObject):
         """
         self.stop()
         super(UploadWorker, self).deleteLater()
-
-
-
-
-
-
-
-
-
 
 
 

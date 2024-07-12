@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QScrollArea, QToolButton, QStyledItemDelegate
+from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QScrollArea, QToolButton, QStyledItemDelegate, QDialog, QButtonGroup, QRadioButton, QGridLayout, QCheckBox, QDialogButtonBox, QMessageBox
 from PySide6.QtGui import  QMovie, QIcon
 from PySide6.QtCore import Qt, QSize
 
@@ -587,6 +587,129 @@ def stopLoadingAnimation(label, movie, scrollArea):
     current_size = scrollArea.size()  # Get the current size of the scroll area.
     updated_height = current_size.height() - 20  # Decrease the height to remove the space for the animation.
     scrollArea.setFixedSize(current_size.width(), updated_height)  # Apply the new size to the scroll area.
+
+
+class UploadOptionsDialog(QDialog):
+    """
+    Dialog to gather upload options from the user.
+    """
+    def __init__(self, parent=None):
+        """
+        Initializes the UploadOptionsDialog with upload options and scales.
+        """
+        super().__init__(parent)
+        self.setWindowTitle("Upload to Sandbox")
+        self.setModal(True)
+
+        # Create the main layout
+        self.layout = QVBoxLayout(self)
+
+        # Create a QButtonGroup for mutual exclusivity
+        self.uploadOptionGroup = QButtonGroup(self)
+
+        # Create a horizontal layout for the main options
+        main_options_layout = QHBoxLayout()
+
+        # Upload options
+        self.registered_mesh_radio = QRadioButton("Registered Mesh")
+        self.input_mesh_radio = QRadioButton("Input Mesh (if available)")
+
+        # Add radio buttons to the button group
+        self.uploadOptionGroup.addButton(self.registered_mesh_radio)
+        self.uploadOptionGroup.addButton(self.input_mesh_radio)
+
+        main_options_layout.addWidget(self.registered_mesh_radio)
+        main_options_layout.addWidget(self.input_mesh_radio)
+
+        self.layout.addLayout(main_options_layout)
+
+        # Create a grid layout to position elements correctly
+        grid_layout = QGridLayout()
+
+        # Add registered mesh option to the left column
+        grid_layout.addWidget(self.registered_mesh_radio, 0, 0)
+
+        # Add input mesh option to the right column
+        grid_layout.addWidget(self.input_mesh_radio, 0, 1)
+
+        # Create a vertical layout for the input mesh options in the right column
+        self.input_mesh_options_layout = QVBoxLayout()
+
+        # Add the always visible text
+        self.scale_question_label = QLabel("What is the input mesh scale?")
+        self.input_mesh_options_layout.addWidget(self.scale_question_label)
+
+        # Add the WT/CFD scale options
+        self.wt_scale_checkbox = QCheckBox("WT Scale (60%)")
+        self.cfd_scale_checkbox = QCheckBox("CFD Scale (100%)")
+        self.wt_scale_checkbox.setDisabled(True)
+        self.cfd_scale_checkbox.setDisabled(True)
+
+        self.input_mesh_options_layout.addWidget(self.wt_scale_checkbox)
+        self.input_mesh_options_layout.addWidget(self.cfd_scale_checkbox)
+
+        # Add input mesh options to the grid layout in the right column
+        grid_layout.addLayout(self.input_mesh_options_layout, 1, 1)
+
+        # Add the grid layout to the main layout
+        self.layout.addLayout(grid_layout)
+
+        # Connect input mesh radio button to enable/disable scale options
+        self.input_mesh_radio.toggled.connect(self.toggleScaleOptions)
+
+        # Dialog buttons
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+        # Retrieve OK and Cancel buttons from button_box
+        ok_button = self.button_box.button(QDialogButtonBox.Ok)
+        cancel_button = self.button_box.button(QDialogButtonBox.Cancel)
+
+        # Create a horizontal layout for the buttons
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(ok_button)
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_button)
+        
+        self.layout.addLayout(button_layout)
+
+        # Connect the buttons to dialog accept and reject methods
+        self.button_box.accepted.connect(self.verifySelection)
+        self.button_box.rejected.connect(self.reject)
+
+    def toggleScaleOptions(self, checked):
+        """
+        Enables or disables the scale options based on the input mesh selection.
+        """
+        self.wt_scale_checkbox.setDisabled(not checked)
+        self.cfd_scale_checkbox.setDisabled(not checked)
+
+    def verifySelection(self):
+        """
+        Verifies the selection before accepting the dialog.
+        """
+        if self.registered_mesh_radio.isChecked():
+            self.accept()
+        elif self.input_mesh_radio.isChecked():
+            if self.wt_scale_checkbox.isChecked() or self.cfd_scale_checkbox.isChecked():
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Warning", "Please select the input file scale.")
+        else:
+            QMessageBox.warning(self, "Warning", "Please select an upload option.")
+
+    def getSelectedOptions(self):
+        """
+        Retrieves the selected upload options.
+
+        Returns:
+            tuple: A tuple containing the upload type ("registered" or "input") and the scale ("WT" or "CFD") if applicable.
+        """
+        if self.registered_mesh_radio.isChecked():
+            return "registered", None
+        elif self.input_mesh_radio.isChecked():
+            scale = "WT" if self.wt_scale_checkbox.isChecked() else "CFD" if self.cfd_scale_checkbox.isChecked() else None
+            return "input", scale
+        return None, None
 
 
 
