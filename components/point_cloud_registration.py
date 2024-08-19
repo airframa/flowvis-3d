@@ -46,7 +46,7 @@ class PointCloudRegistration(PointCloudPreprocessor):
             self.target_path = None
 
         # Create a log file path including the file name and extension
-        self.log_file_path = "//srvnetapp00/Technical/Aerodynamics/Development/FlowViz/FV_CFD_REF/registration_log.txt"
+        self.log_file_path = "//spe-ch-md9/data/Departments/Aerodynamics/Development/FlowViz/FV_CFD_REF/registration_log.txt"
         # Then, open the log file for writing as before
         self.log_file = open(self.log_file_path, "w")
 
