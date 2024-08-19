@@ -588,7 +588,6 @@ def stopLoadingAnimation(label, movie, scrollArea):
     updated_height = current_size.height() - 20  # Decrease the height to remove the space for the animation.
     scrollArea.setFixedSize(current_size.width(), updated_height)  # Apply the new size to the scroll area.
 
-
 class UploadOptionsDialog(QDialog):
     """
     Dialog to gather upload options from the user.
@@ -603,6 +602,11 @@ class UploadOptionsDialog(QDialog):
 
         # Create the main layout
         self.layout = QVBoxLayout(self)
+
+        # Add the label at the top of the dialog
+        self.upload_label = QLabel("Which item would you like to upload?")
+        self.upload_label.setAlignment(Qt.AlignLeft)  # Center-align the text
+        self.layout.addWidget(self.upload_label)  # Add the label to the layout
 
         # Create a QButtonGroup for mutual exclusivity
         self.uploadOptionGroup = QButtonGroup(self)
@@ -639,14 +643,19 @@ class UploadOptionsDialog(QDialog):
         self.scale_question_label = QLabel("What is the input mesh scale?")
         self.input_mesh_options_layout.addWidget(self.scale_question_label)
 
-        # Add the WT/CFD scale options
-        self.wt_scale_checkbox = QCheckBox("WT Scale (60%)")
-        self.cfd_scale_checkbox = QCheckBox("CFD Scale (100%)")
-        self.wt_scale_checkbox.setDisabled(True)
-        self.cfd_scale_checkbox.setDisabled(True)
+        # Replace checkboxes with radio buttons to ensure exclusivity
+        self.scale_radio_group = QButtonGroup(self)
 
-        self.input_mesh_options_layout.addWidget(self.wt_scale_checkbox)
-        self.input_mesh_options_layout.addWidget(self.cfd_scale_checkbox)
+        # Add the WT/CFD scale options as radio buttons
+        self.wt_scale_radio = QRadioButton("WT Scale (60%)")
+        self.cfd_scale_radio = QRadioButton("CFD Scale (100%)")
+
+        # Add radio buttons to the button group to make them mutually exclusive
+        self.scale_radio_group.addButton(self.wt_scale_radio)
+        self.scale_radio_group.addButton(self.cfd_scale_radio)
+
+        self.input_mesh_options_layout.addWidget(self.wt_scale_radio)
+        self.input_mesh_options_layout.addWidget(self.cfd_scale_radio)
 
         # Add input mesh options to the grid layout in the right column
         grid_layout.addLayout(self.input_mesh_options_layout, 1, 1)
@@ -680,8 +689,8 @@ class UploadOptionsDialog(QDialog):
         """
         Enables or disables the scale options based on the input mesh selection.
         """
-        self.wt_scale_checkbox.setDisabled(not checked)
-        self.cfd_scale_checkbox.setDisabled(not checked)
+        self.wt_scale_radio.setDisabled(not checked)
+        self.cfd_scale_radio.setDisabled(not checked)
 
     def verifySelection(self):
         """
@@ -690,7 +699,7 @@ class UploadOptionsDialog(QDialog):
         if self.registered_mesh_radio.isChecked():
             self.accept()
         elif self.input_mesh_radio.isChecked():
-            if self.wt_scale_checkbox.isChecked() or self.cfd_scale_checkbox.isChecked():
+            if self.wt_scale_radio.isChecked() or self.cfd_scale_radio.isChecked():
                 self.accept()
             else:
                 QMessageBox.warning(self, "Warning", "Please select the input file scale.")
@@ -707,9 +716,10 @@ class UploadOptionsDialog(QDialog):
         if self.registered_mesh_radio.isChecked():
             return "registered", None
         elif self.input_mesh_radio.isChecked():
-            scale = "WT" if self.wt_scale_checkbox.isChecked() else "CFD" if self.cfd_scale_checkbox.isChecked() else None
+            scale = "WT" if self.wt_scale_radio.isChecked() else "CFD" if self.cfd_scale_radio.isChecked() else None
             return "input", scale
         return None, None
+
 
 
 
