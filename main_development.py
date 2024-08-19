@@ -1298,7 +1298,7 @@ class MainApp(QMainWindow):
             return
 
         # Define the target upload directory.
-        self.target_directory = r"//srvnetapp00/Technical/Aerodynamics/Development/SANDBOX"
+        self.target_directory = r"//spe-ch-md9/data/Departments/Aerodynamics/Development/SANDBOX"
 
         # Extract the case number from the case description.
         case_number = self.case_description.split('_')[1]
