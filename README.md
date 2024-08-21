@@ -66,7 +66,7 @@ The application provides a user-friendly interface for loading point cloud data.
 - Select a point cloud file in `.ply` format using a file dialog or drag-and-drop.
 
   <div align="center">
-    <img src="./resources/load_pcd_1.png" alt="Load Point Cloud File" width="450"/>
+    <img src="./resources/load_pcd_1.png" alt="Load Point Cloud File" width="800"/>
   </div>
 
 - Visualize the loaded point cloud in a 3D view.
@@ -82,7 +82,7 @@ The application includes registration features to align point clouds to a user-d
 - Perform registration using RANSAC Global Registration and ICP algorithms.
 
   <div align="center">
-    <img src="./resources/register_pcd_1.png" alt="Perform Registration" width="450"/>
+    <img src="./resources/register_pcd_1.png" alt="Perform Registration" width="800"/>
   </div>
 
 - Copy the transformation matrix to the clipboard.
@@ -97,14 +97,14 @@ The application supports saving the registered point cloud data and uploading it
 - Provide metadata such as model, WT Run, WT Map, car part, and load condition for correct file naming.
 
   <div align="center">
-    <img src="./resources/sandboxupload_1.PNG" alt="Provide Metadata" width="450"/>
+    <img src="./resources/sandbox_upload_1.PNG" alt="Provide Metadata" width="800"/>
   </div>
 
 - Save the registered point cloud and mesh data (if available) in appropriate formats for further analysis.
 - Automatically upload either the registered data or the input mesh (according to the user preference) to a predefined sandbox location for sharing and comparison with the available CFD data. 
 
   <div align="center">
-    <img src="./resources/sandboxupload_2.PNG" alt="Sandbox Upload" width="450"/>
+    <img src="./resources/sandbox_upload_2.PNG" alt="Sandbox Upload" width="800"/>
   </div>
 
 ## Future Functionalities
