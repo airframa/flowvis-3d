@@ -61,12 +61,14 @@ To set up this project locally, follow these steps:
 
 ## Application Functionalities
 
+Template files (point cloud and reference model for registration) are made available [here](https://drive.google.com/drive/folders/1EPS_aMYy0P-yB_j_p0h8PQSUtPSbWzo4?usp=drive_link) for the users to test the app functionalities. 
+
 ### 1. Loading Point Cloud Data
 The application provides a user-friendly interface for loading point cloud data. Users can:
 - Select a point cloud file in `.ply` format using a file dialog or drag-and-drop.
 
   <div align="center">
-    <img src="./resources/load_pcd_1.png" alt="Load Point Cloud File" width="800"/>
+    <img src="./resources/load_pcd_1.png" alt="Load Point Cloud File" width="300"/>
   </div>
 
 - Visualize the loaded point cloud in a 3D view.
@@ -82,7 +84,7 @@ The application includes registration features to align point clouds to a user-d
 - Perform registration using RANSAC Global Registration and ICP algorithms.
 
   <div align="center">
-    <img src="./resources/register_pcd_1.png" alt="Perform Registration" width="800"/>
+    <img src="./resources/register_pcd_1_v2.png" alt="Perform Registration" width="300"/>
   </div>
 
 - Copy the transformation matrix to the clipboard.
@@ -94,18 +96,20 @@ The application includes registration features to align point clouds to a user-d
 
 ### 3. Saving Registered Data
 The application supports saving the registered point cloud data and uploading it to a sandbox environment. Users can:
-- Provide metadata such as model, WT Run, WT Map, car part, and load condition for correct file naming.
+- Provide metadata such as model, WT Run, WT Map, car part, and load condition for correct file naming. The naming convention is the one adopted internally by the team.
 
   <div align="center">
-    <img src="./resources/sandbox_upload_1.PNG" alt="Provide Metadata" width="800"/>
+    <img src="./resources/sandbox_upload_1.png" alt="Provide Metadata" width="300"/>
   </div>
 
 - Save the registered point cloud and mesh data (if available) in appropriate formats for further analysis.
 - Automatically upload either the registered data or the input mesh (according to the user preference) to a predefined sandbox location for sharing and comparison with the available CFD data. 
 
   <div align="center">
-    <img src="./resources/sandbox_upload_2.PNG" alt="Sandbox Upload" width="800"/>
+    <img src="./resources/sandbox_upload_2_v2.png" alt="Sandbox Upload" width="300"/>
   </div>
+
+  The sandbox functionality is specific to the team for uploading the data on the server and comparing it to other data sources (such as CFD data). This item is     therefore left here just as a demonstration. The application generates in this case a local `sandbox` folder, where the data and metadata is stored in the         required format for the sandbox upload. 
 
 ## Future Functionalities
 
