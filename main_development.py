@@ -235,7 +235,9 @@ class MainApp(QMainWindow):
         self.loadFileButton = QPushButton("Select Scanned Point Cloud")
         applyButtonStyle(self.loadFileButton)  # Apply predefined styling to the button.
         # Connect the button's click event to open a file dialog, specifying the directory to start in.
-        self.loadFileButton.clicked.connect(lambda: self.openFileDialog(self.loadFileLineEdit, "\\\\spe-ch-md9\\data\\Departments\\Aerodynamics\\Development\\FlowViz"))
+        # self.loadFileButton.clicked.connect(lambda: self.openFileDialog(self.loadFileLineEdit, "\\\\spe-ch-md9\\data\\Departments\\Aerodynamics\\Development\\FlowViz"))
+        # Update for selecting the scanned point cloud (Replace company-specific path)
+        self.loadFileButton.clicked.connect(lambda: self.openFileDialog(self.loadFileLineEdit, os.getcwd()))
         self.visualizationSection.contentLayout().addWidget(self.loadFileButton)  # Add the button to the visualization section's layout.
 
         # Create a line edit for displaying the path of the loaded file, which is read-only to prevent manual editing.
@@ -285,7 +287,9 @@ class MainApp(QMainWindow):
         self.loadRefFileButton = QPushButton("Select Reference")
         applyButtonStyle(self.loadRefFileButton)  # Apply predefined styling to the button.
         # Connect the button's click event to open a file dialog, specifying the directory to start in.
-        self.loadRefFileButton.clicked.connect(lambda: self.openFileDialog(self.loadRefFileLineEdit, "\\\\spe-ch-md9\\data\\Departments\\Aerodynamics\\Development\\FlowViz"))
+        # self.loadRefFileButton.clicked.connect(lambda: self.openFileDialog(self.loadRefFileLineEdit, "\\\\spe-ch-md9\\data\\Departments\\Aerodynamics\\Development\\FlowViz"))
+        # Update for selecting reference file (Replace company-specific path)
+        self.loadRefFileButton.clicked.connect(lambda: self.openFileDialog(self.loadRefFileLineEdit, os.getcwd()))
         self.registrationSection.contentLayout().addWidget(self.loadRefFileButton)  # Add the button to the registration section's layout.
 
         # Create a line edit for displaying the path of the loaded reference file, which is read-only to prevent manual editing.
@@ -1298,7 +1302,9 @@ class MainApp(QMainWindow):
             return
 
         # Define the target upload directory.
-        self.target_directory = r"//spe-ch-md9/data/Departments/Aerodynamics/Development/SANDBOX"
+        # self.target_directory = r"//spe-ch-md9/data/Departments/Aerodynamics/Development/SANDBOX"
+        # Define the target upload directory for demonstration purposes.
+        self.target_directory = os.path.join(os.getcwd(), 'sandbox')
 
         # Extract the case number from the case description.
         case_number = self.case_description.split('_')[1]

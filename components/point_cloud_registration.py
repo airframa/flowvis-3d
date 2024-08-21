@@ -46,10 +46,15 @@ class PointCloudRegistration(PointCloudPreprocessor):
             self.target_path = None
 
         # Create a log file path including the file name and extension
-        self.log_file_path = "//spe-ch-md9/data/Departments/Aerodynamics/Development/FlowViz/FV_CFD_REF/registration_log.txt"
-        # Then, open the log file for writing as before
+        # self.log_file_path = "//spe-ch-md9/data/Departments/Aerodynamics/Development/FlowViz/FV_CFD_REF/registration_log.txt"
+        # Define the log file path within the repository
+        self.log_file_path = os.path.join(os.getcwd(), 'registration_log', 'registration_log.txt')
+        # Ensure the directory exists before writing to the log file
+        log_dir = os.path.dirname(self.log_file_path)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        # Open the log file for writing
         self.log_file = open(self.log_file_path, "w")
-
 
         # Initialize global registration transfromation variable
         self.transformation = None
@@ -308,7 +313,9 @@ class PointCloudRegistration(PointCloudPreprocessor):
 
         # Print the final transformation data and metrics to the console
         # log_text = "\n"
-        path = "//srvnetapp00/Technical/Aerodynamics/Development/FlowViz/FV_CFD_REF"
+        # path = "//srvnetapp00/Technical/Aerodynamics/Development/FlowViz/FV_CFD_REF"
+        # Use the relative path within the repository for logging
+        path = os.path.join(os.getcwd(), 'registration_log')
         log_text = "Registration procedure completed. Check the procedure log in the file 'registration_log.txt' in the folder at '{}'.".format(path)
         log_text += f"\nRANSAC Global Registration fitness: {best_ransac_fitness}\n"
         # log_text += f"Voxel size for feature detection: {best_voxel_size}\n"
